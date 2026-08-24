@@ -1,0 +1,176 @@
+// ──────────────────────────────────────────────
+// Project LOOP — Prisma Schema
+// Official Zidio Specification
+// ──────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ── Enums ─────────────────────────────────────
+
+enum Role {
+  ADMIN
+  ANALYST
+  VIEWER
+}
+
+enum Sentiment {
+  POS
+  NEU
+  NEG
+}
+
+enum FeedbackStatus {
+  NEW
+  REVIEWED
+  ACTIONED
+}
+
+// ── Workspace ─────────────────────────────────
+// Multi-tenant root. Every tenant-owned entity scopes to workspaceId.
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations — has many
+  users     User[]
+  feedbacks Feedback[]
+  themes    Theme[]
+  reports   Report[]
+
+  @@index([name])
+}
+
+// ── User ──────────────────────────────────────
+// Each user belongs to exactly one workspace with a role.
+
+model User {
+  id           String   @id @default(cuid())
+  name         String?
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(VIEWER)
+  workspaceId  String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  reports   Report[] // reports this user generated
+
+  // Indexes
+  @@index([workspaceId])
+  @@index([workspaceId, role])
+}
+
+// ── Feedback ──────────────────────────────────
+// Core feedback entity. Belongs to exactly one workspace.
+
+model Feedback {
+  id             String         @id @default(cuid())
+  workspaceId    String
+  content        String         @db.Text
+  channel        String // e.g. "email", "survey", "social", "api", "manual"
+  sourceRef      String? // external reference ID (ticket #, tweet ID, etc.)
+  customerLabel  String? // anonymized customer identifier
+  sentiment      Sentiment      @default(NEU)
+  sentimentScore Float          @default(0) // range: -1.0 to 1.0
+  status         FeedbackStatus @default(NEW)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  // Relations
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  themes    FeedbackTheme[]
+  embedding Embedding?
+
+  // Indexes — optimized for workspace-scoped queries
+  @@index([workspaceId, createdAt(sort: Desc)])
+  @@index([workspaceId, sentiment])
+  @@index([workspaceId, status])
+  @@index([workspaceId, channel])
+  @@index([status])
+}
+
+// ── Theme ─────────────────────────────────────
+// AI-generated or manually created themes per workspace.
+
+model Theme {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  description String?
+  color       String? // hex color for UI display
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  feedbacks FeedbackTheme[]
+
+  @@unique([workspaceId, name]) // theme names unique per workspace
+  // Indexes
+  @@index([workspaceId])
+}
+
+// ── FeedbackTheme ─────────────────────────────
+// Many-to-many join between Feedback and Theme with confidence score.
+
+model FeedbackTheme {
+  feedbackId String
+  themeId    String
+  confidence Float  @default(1) // range: 0 to 1
+
+  // Relations
+  feedback Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  theme    Theme    @relation(fields: [themeId], references: [id], onDelete: Cascade)
+
+  // Constraints
+  @@id([feedbackId, themeId])
+  @@index([themeId])
+  @@index([feedbackId])
+}
+
+// ── Embedding ─────────────────────────────────
+// Vector embedding for semantic search (Ask LOOP). One per feedback.
+
+model Embedding {
+  id         String                      @id @default(cuid())
+  feedbackId String                      @unique
+  vector     Unsupported("vector(1536)") // OpenAI ada-002 dimension
+
+  // Relations
+  feedback Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+}
+
+// ── Report ────────────────────────────────────
+// Generated analytics reports scoped to a workspace.
+
+model Report {
+  id          String   @id @default(cuid())
+  workspaceId String
+  title       String
+  periodStart DateTime
+  periodEnd   DateTime
+  contentJson Json // structured report data
+  createdAt   DateTime @default(now())
+
+  // Relations
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  generatedBy String
+  author      User      @relation(fields: [generatedBy], references: [id], onDelete: Restrict)
+
+  // Indexes
+  @@index([workspaceId, createdAt(sort: Desc)])
+  @@index([workspaceId])
+  @@index([generatedBy])
+}
