@@ -1,6 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { Dialog } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { AlertCircle, Trash2, ArrowRight, Calendar, User, Hash, Tag, Sparkles, Zap } from "lucide-react";
 
 interface FeedbackItem {
   id: string;
@@ -10,6 +14,9 @@ interface FeedbackItem {
   customerLabel: string | null;
   sentiment: string;
   sentimentScore: number;
+  confidence: number | null;
+  urgency: string;
+  shortSummary: string | null;
   status: string;
   createdAt: string;
   updatedAt: string;
@@ -40,14 +47,14 @@ export default function FeedbackDetail({
   onUpdated,
   onDeleted,
 }: FeedbackDetailProps) {
-  const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [classifying, setClassifying] = useState(false);
+  const [classifyError, setClassifyError] = useState<string | null>(null);
+  const [detail, setDetail] = useState<FeedbackItem>(feedback);
 
   const canEdit = userRole === "ADMIN" || userRole === "ANALYST";
-  const nextStatuses = STATUS_TRANSITIONS[feedback.status] || [];
-
-  // ── Update Status ───────────────────────────
+  const nextStatuses = STATUS_TRANSITIONS[detail.status] || [];
 
   async function handleStatusChange(newStatus: string) {
     setLoading(true);
@@ -73,10 +80,8 @@ export default function FeedbackDetail({
     }
   }
 
-  // ── Delete Feedback ─────────────────────────
-
   async function handleDelete() {
-    if (!confirm("Are you sure you want to delete this feedback?")) {
+    if (!confirm("Are you sure you want to delete this feedback signal?")) {
       return;
     }
 
@@ -101,166 +106,264 @@ export default function FeedbackDetail({
     }
   }
 
-  // ── Sentiment Color ─────────────────────────
+  async function handleReclassify() {
+    setClassifying(true);
+    setClassifyError(null);
 
-  function sentimentColor(sentiment: string): string {
-    switch (sentiment) {
-      case "POS":
-        return "bg-green-100 text-green-800";
-      case "NEG":
-        return "bg-red-100 text-red-800";
-      default:
-        return "bg-gray-100 text-gray-800";
+    try {
+      const response = await fetch(`/api/feedback/${feedback.id}/classify`, {
+        method: "POST",
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Classification failed");
+      }
+
+      // Update the detail with the fresh feedback data from the API
+      if (data.feedback) {
+        setDetail(data.feedback);
+      }
+
+      // Notify parent to refresh list data
+      onUpdated();
+    } catch (err) {
+      setClassifyError(
+        err instanceof Error ? err.message : "Classification failed"
+      );
+    } finally {
+      setClassifying(false);
     }
   }
-
-  function statusColor(status: string): string {
-    switch (status) {
-      case "NEW":
-        return "bg-blue-100 text-blue-800";
-      case "REVIEWED":
-        return "bg-yellow-100 text-yellow-800";
-      case "ACTIONED":
-        return "bg-green-100 text-green-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  }
-
-  // ── Render ──────────────────────────────────
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200">
-          <div className="flex justify-between items-start">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">
-                Feedback Details
-              </h2>
-              <p className="text-sm text-gray-500 mt-1">
-                Created {new Date(feedback.createdAt).toLocaleString()}
-              </p>
-            </div>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+    <Dialog
+      isOpen={true}
+      onClose={onClose}
+      title="Feedback Signal Details"
+      subtitle={`Created ${new Date(feedback.createdAt).toLocaleString()}`}
+      maxWidth="xl"
+    >
+      <div className="p-6 space-y-5">
+        {error && (
+          <div className="rounded-lg bg-rose-50 border border-rose-200 p-3 flex items-center gap-2 text-rose-700 text-xs font-medium">
+            <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+            <span>{error}</span>
           </div>
+        )}
+
+        {/* Badges Bar */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge
+            variant={
+              detail.status === "NEW"
+                ? "new"
+                : detail.status === "REVIEWED"
+                ? "reviewed"
+                : "actioned"
+            }
+            size="md"
+          >
+            Workflow: {detail.status}
+          </Badge>
+
+          <Badge
+            variant={
+              detail.sentiment === "POS"
+                ? "pos"
+                : detail.sentiment === "NEG"
+                ? "neg"
+                : "neu"
+            }
+            size="md"
+            dot
+          >
+            Sentiment: {detail.sentiment} (Score: {detail.sentimentScore.toFixed(2)})
+          </Badge>
+
+          <Badge
+            variant={
+              detail.urgency === "CRITICAL"
+                ? "neg"
+                : detail.urgency === "HIGH"
+                ? "neg"
+                : detail.urgency === "MEDIUM"
+                ? "reviewed"
+                : "neutral"
+            }
+            size="md"
+          >
+            Urgency: {detail.urgency}
+          </Badge>
+
+          <Badge variant="neutral" size="md" className="font-mono uppercase">
+            Channel: {detail.channel}
+          </Badge>
         </div>
 
-        {/* Content */}
-        <div className="px-6 py-4 space-y-4">
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm">
-              {error}
-            </div>
-          )}
+        {/* Content Box */}
+        <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-4 space-y-1.5">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+            Feedback Text
+          </span>
+          <p className="text-xs sm:text-sm text-slate-900 leading-relaxed whitespace-pre-wrap font-normal">
+            {detail.content}
+          </p>
+        </div>
 
-          {/* Status & Sentiment */}
-          <div className="flex flex-wrap gap-2">
-            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${statusColor(feedback.status)}`}>
-              {feedback.status}
-            </span>
-            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${sentimentColor(feedback.sentiment)}`}>
-              {feedback.sentiment} ({feedback.sentimentScore.toFixed(2)})
-            </span>
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800">
-              {feedback.channel}
+        {/* AI Summary Section */}
+        <div className="bg-indigo-50/40 border border-indigo-100/80 rounded-xl p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-indigo-500" />
+            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600">
+              AI Analysis
             </span>
           </div>
 
-          {/* Content */}
+          {/* Short Summary */}
           <div>
-            <h3 className="text-sm font-medium text-gray-700 mb-1">Content</h3>
-            <p className="text-gray-900 whitespace-pre-wrap">{feedback.content}</p>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+              Summary
+            </span>
+            <p className="text-xs sm:text-sm text-slate-800 leading-relaxed">
+              {detail.shortSummary || (
+                <span className="text-slate-400 italic">No AI summary available.</span>
+              )}
+            </p>
           </div>
 
-          {/* Metadata */}
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            {feedback.sourceRef && (
-              <div>
-                <span className="text-gray-500">Source Ref:</span>
-                <span className="ml-2 text-gray-900">{feedback.sourceRef}</span>
-              </div>
-            )}
-            {feedback.customerLabel && (
-              <div>
-                <span className="text-gray-500">Customer:</span>
-                <span className="ml-2 text-gray-900">{feedback.customerLabel}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Themes */}
-          {feedback.themes && feedback.themes.length > 0 && (
+          {/* Confidence */}
+          <div className="flex flex-wrap items-center gap-4 text-xs">
             <div>
-              <h3 className="text-sm font-medium text-gray-700 mb-2">Themes</h3>
-              <div className="flex flex-wrap gap-2">
-                {feedback.themes.map((t) => (
-                  <span
-                    key={t.theme.id}
-                    className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium"
-                    style={{
-                      backgroundColor: t.theme.color + "20",
-                      color: t.theme.color,
-                    }}
-                  >
-                    {t.theme.name} ({Math.round(t.confidence * 100)}%)
+              <span className="text-slate-500 font-medium">Confidence: </span>
+              <span className="font-semibold text-slate-800">
+                {detail.confidence != null ? `${Math.round(detail.confidence * 100)}%` : (
+                  <span className="text-slate-400 italic">No confidence score available.</span>
+                )}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Metadata Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs bg-white border border-slate-200/60 rounded-xl p-4">
+          <div className="space-y-1">
+            <span className="text-slate-500 font-medium block">Source Reference:</span>
+            <p className="font-mono text-slate-800 font-semibold">
+              {detail.sourceRef || "None provided"}
+            </p>
+          </div>
+
+          <div className="space-y-1">
+            <span className="text-slate-500 font-medium block">Customer Label:</span>
+            <p className="font-semibold text-purple-700">
+              {detail.customerLabel || "Unlabeled"}
+            </p>
+          </div>
+        </div>
+
+        {/* Themes Section */}
+        <div className="space-y-2">
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-600 block">
+            Categorized Themes
+          </span>
+          {detail.themes && detail.themes.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {detail.themes.map((t) => (
+                <span
+                  key={t.theme.id}
+                  className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold border shadow-2xs"
+                  style={{
+                    backgroundColor: t.theme.color + "15",
+                    color: t.theme.color,
+                    borderColor: t.theme.color + "30",
+                  }}
+                >
+                  <Tag className="w-3 h-3" />
+                  <span>{t.theme.name}</span>
+                  <span className="text-[10px] opacity-75 font-mono ml-1">
+                    ({Math.round(t.confidence * 100)}% match)
                   </span>
-                ))}
-              </div>
+                </span>
+              ))}
             </div>
-          )}
-
-          {/* Status Transitions */}
-          {canEdit && nextStatuses.length > 0 && (
-            <div>
-              <h3 className="text-sm font-medium text-gray-700 mb-2">
-                Change Status
-              </h3>
-              <div className="flex gap-2">
-                {nextStatuses.map((status) => (
-                  <button
-                    key={status}
-                    onClick={() => handleStatusChange(status)}
-                    disabled={loading}
-                    className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
-                  >
-                    Move to {status}
-                  </button>
-                ))}
-              </div>
-            </div>
+          ) : (
+            <p className="text-xs text-slate-400 italic">No themes identified.</p>
           )}
         </div>
 
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 flex justify-between">
+        {/* Reclassify with AI — ADMIN/ANALYST only */}
+        {canEdit && (
+          <div className="p-4 rounded-xl bg-violet-50/60 border border-violet-100 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-violet-900 block">
+                AI Classification
+              </span>
+              <Button
+                onClick={handleReclassify}
+                isLoading={classifying}
+                disabled={classifying}
+                variant="outline"
+                size="sm"
+                leftIcon={<Zap className="w-3.5 h-3.5" />}
+                className="border-violet-200 text-violet-700 hover:bg-violet-100"
+              >
+                {classifying ? "Classifying..." : "Reclassify with AI"}
+              </Button>
+            </div>
+            {classifyError && (
+              <div className="flex items-center gap-2 text-rose-600 text-xs">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                <span>{classifyError}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Status Transition Action */}
+        {canEdit && nextStatuses.length > 0 && (
+          <div className="p-4 rounded-xl bg-indigo-50/60 border border-indigo-100 space-y-2">
+            <span className="text-xs font-semibold text-indigo-900 block">
+              Advance Workflow Status
+            </span>
+            <div className="flex gap-2">
+              {nextStatuses.map((status) => (
+                <Button
+                  key={status}
+                  onClick={() => handleStatusChange(status)}
+                  isLoading={loading}
+                  variant="primary"
+                  size="sm"
+                  rightIcon={<ArrowRight className="w-3.5 h-3.5" />}
+                >
+                  Move to {status}
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Footer Actions */}
+        <div className="flex items-center justify-between pt-4 border-t border-slate-100">
           <div>
             {canEdit && (
-              <button
+              <Button
                 onClick={handleDelete}
-                disabled={loading}
-                className="px-4 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-300 rounded-md hover:bg-red-100 disabled:opacity-50"
+                isLoading={loading}
+                variant="danger"
+                size="sm"
+                leftIcon={<Trash2 className="w-3.5 h-3.5" />}
               >
-                Delete
-              </button>
+                Delete Signal
+              </Button>
             )}
           </div>
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-          >
+          <Button onClick={onClose} variant="outline" size="sm">
             Close
-          </button>
+          </Button>
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

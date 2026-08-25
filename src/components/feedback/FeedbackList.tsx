@@ -1,5 +1,12 @@
 "use client";
 
+import React from "react";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { TableSkeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
+import { MessageSquare, Calendar, User, Hash } from "lucide-react";
+
 interface FeedbackItem {
   id: string;
   content: string;
@@ -8,6 +15,9 @@ interface FeedbackItem {
   customerLabel: string | null;
   sentiment: string;
   sentimentScore: number;
+  confidence: number | null;
+  urgency: string;
+  shortSummary: string | null;
   status: string;
   createdAt: string;
   updatedAt: string;
@@ -24,38 +34,10 @@ interface FeedbackListProps {
   userRole?: string;
 }
 
-// ── Helpers ───────────────────────────────────
-
-function sentimentColor(sentiment: string): string {
-  switch (sentiment) {
-    case "POS":
-      return "bg-green-100 text-green-800";
-    case "NEG":
-      return "bg-red-100 text-red-800";
-    default:
-      return "bg-gray-100 text-gray-800";
-  }
-}
-
-function statusColor(status: string): string {
-  switch (status) {
-    case "NEW":
-      return "bg-blue-100 text-blue-800";
-    case "REVIEWED":
-      return "bg-yellow-100 text-yellow-800";
-    case "ACTIONED":
-      return "bg-green-100 text-green-800";
-    default:
-      return "bg-gray-100 text-gray-800";
-  }
-}
-
 function truncate(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
   return text.slice(0, maxLength) + "...";
 }
-
-// ── Component ─────────────────────────────────
 
 export default function FeedbackList({
   feedback,
@@ -63,76 +45,182 @@ export default function FeedbackList({
   onSelect,
 }: FeedbackListProps) {
   if (loading) {
-    return (
-      <div className="bg-white shadow rounded-lg p-8 text-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-        <p className="mt-4 text-gray-500">Loading feedback...</p>
-      </div>
-    );
+    return <TableSkeleton rows={6} />;
   }
 
   if (feedback.length === 0) {
     return (
-      <div className="bg-white shadow rounded-lg p-8 text-center">
-        <p className="text-gray-500">No feedback found</p>
-      </div>
+      <EmptyState
+        icon={<MessageSquare className="w-8 h-8 text-slate-400" />}
+        title="No feedback signals found"
+        description="There are no customer feedback records matching your current filter criteria or inbox."
+      />
     );
   }
 
   return (
-    <div className="bg-white shadow rounded-lg overflow-hidden">
-      <ul className="divide-y divide-gray-200">
-        {feedback.map((item) => (
-          <li
-            key={item.id}
-            className="px-6 py-4 hover:bg-gray-50 cursor-pointer"
-            onClick={() => onSelect(item)}
-          >
-            <div className="flex items-start justify-between">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-gray-900 line-clamp-2">
-                  {truncate(item.content, 150)}
-                </p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                    {item.channel}
-                  </span>
-                  <span
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${sentimentColor(item.sentiment)}`}
-                  >
-                    {item.sentiment}
-                  </span>
-                  <span
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColor(item.status)}`}
-                  >
-                    {item.status}
-                  </span>
-                  {item.customerLabel && (
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                      {item.customerLabel}
+    <div>
+      {/* Desktop Table View */}
+      <div className="hidden md:block">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead className="w-[45%]">Feedback Signal</TableHead>
+              <TableHead>Channel</TableHead>
+              <TableHead>Sentiment</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Themes / Labels</TableHead>
+              <TableHead className="text-right">Created Date</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {feedback.map((item) => (
+              <TableRow
+                key={item.id}
+                onClick={() => onSelect(item)}
+                className="group hover:bg-slate-50/80 transition-colors"
+              >
+                <TableCell className="font-medium text-slate-900 py-3.5">
+                  <p className="line-clamp-2 text-xs sm:text-sm leading-relaxed">
+                    {item.content}
+                  </p>
+                  {item.sourceRef && (
+                    <span className="inline-flex items-center gap-1 text-[11px] text-slate-400 mt-1 font-mono">
+                      <Hash className="w-3 h-3 text-slate-400" />
+                      {item.sourceRef}
                     </span>
                   )}
-                  {item.themes?.map((t) => (
-                    <span
-                      key={t.theme.id}
-                      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
-                      style={{
-                        backgroundColor: t.theme.color + "20",
-                        color: t.theme.color,
-                      }}
-                    >
-                      {t.theme.name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-              <div className="ml-4 text-right text-xs text-gray-500 whitespace-nowrap">
-                {new Date(item.createdAt).toLocaleDateString()}
+                </TableCell>
+
+                <TableCell className="whitespace-nowrap">
+                  <Badge variant="neutral" size="sm" className="font-mono uppercase">
+                    {item.channel}
+                  </Badge>
+                </TableCell>
+
+                <TableCell className="whitespace-nowrap">
+                  <Badge
+                    variant={
+                      item.sentiment === "POS"
+                        ? "pos"
+                        : item.sentiment === "NEG"
+                        ? "neg"
+                        : "neu"
+                    }
+                    size="sm"
+                    dot
+                  >
+                    {item.sentiment}
+                  </Badge>
+                </TableCell>
+
+                <TableCell className="whitespace-nowrap">
+                  <Badge
+                    variant={
+                      item.status === "NEW"
+                        ? "new"
+                        : item.status === "REVIEWED"
+                        ? "reviewed"
+                        : "actioned"
+                    }
+                    size="sm"
+                  >
+                    {item.status}
+                  </Badge>
+                </TableCell>
+
+                <TableCell>
+                  <div className="flex flex-wrap gap-1.5 max-w-xs">
+                    {item.customerLabel && (
+                      <Badge variant="purple" size="sm">
+                        <User className="w-3 h-3 mr-1" />
+                        {item.customerLabel}
+                      </Badge>
+                    )}
+                    {item.themes?.map((t) => (
+                      <span
+                        key={t.theme.id}
+                        className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold border"
+                        style={{
+                          backgroundColor: t.theme.color + "15",
+                          color: t.theme.color,
+                          borderColor: t.theme.color + "30",
+                        }}
+                      >
+                        {t.theme.name}
+                      </span>
+                    ))}
+                  </div>
+                </TableCell>
+
+                <TableCell className="text-right text-xs text-slate-500 whitespace-nowrap font-mono">
+                  {new Date(item.createdAt).toLocaleDateString()}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Mobile Card Stack View */}
+      <div className="md:hidden space-y-3">
+        {feedback.map((item) => (
+          <div
+            key={item.id}
+            onClick={() => onSelect(item)}
+            className="bg-white rounded-xl border border-slate-200 p-4 space-y-3 shadow-xs active:bg-slate-50 cursor-pointer"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <Badge variant="neutral" size="sm" className="font-mono uppercase">
+                {item.channel}
+              </Badge>
+              <div className="flex items-center gap-1.5">
+                <Badge
+                  variant={
+                    item.sentiment === "POS"
+                      ? "pos"
+                      : item.sentiment === "NEG"
+                      ? "neg"
+                      : "neu"
+                  }
+                  size="sm"
+                  dot
+                >
+                  {item.sentiment}
+                </Badge>
+                <Badge
+                  variant={
+                    item.status === "NEW"
+                      ? "new"
+                      : item.status === "REVIEWED"
+                      ? "reviewed"
+                      : "actioned"
+                  }
+                  size="sm"
+                >
+                  {item.status}
+                </Badge>
               </div>
             </div>
-          </li>
+
+            <p className="text-xs text-slate-900 line-clamp-3 leading-relaxed font-medium">
+              {item.content}
+            </p>
+
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-[11px] text-slate-500">
+              <span className="flex items-center gap-1">
+                <Calendar className="w-3 h-3 text-slate-400" />
+                {new Date(item.createdAt).toLocaleDateString()}
+              </span>
+              {item.customerLabel && (
+                <span className="font-mono text-purple-600">
+                  {item.customerLabel}
+                </span>
+              )}
+            </div>
+          </div>
         ))}
-      </ul>
+      </div>
     </div>
   );
 }

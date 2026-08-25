@@ -1,18 +1,23 @@
 "use client";
 
 import { useState } from "react";
+import { Dialog } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { AlertCircle, Plus, Sparkles } from "lucide-react";
+import { FEEDBACK_CHANNELS } from "@/lib/constants";
 
 interface FeedbackFormProps {
   onClose: () => void;
   onCreated: () => void;
 }
 
-const CHANNELS = ["email", "survey", "social", "api", "manual", "chat"];
-
 export default function FeedbackForm({ onClose, onCreated }: FeedbackFormProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [contentLength, setContentLength] = useState(0);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -55,114 +60,106 @@ export default function FeedbackForm({ onClose, onCreated }: FeedbackFormProps) 
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <div className="flex justify-between items-center">
-            <h2 className="text-lg font-semibold text-gray-900">
-              Add Feedback
-            </h2>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+    <Dialog
+      isOpen={true}
+      onClose={onClose}
+      title="Create Feedback Signal"
+      subtitle="Add customer feedback for sentiment analysis and thematic categorization"
+      maxWidth="md"
+    >
+      <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        {error && (
+          <div className="rounded-lg bg-rose-50 border border-rose-200 p-3 flex items-center gap-2 text-rose-700 text-xs font-medium">
+            <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+            <span>{error}</span>
           </div>
+        )}
+
+        <div className="space-y-1.5">
+          <div className="flex justify-between items-center">
+            <label
+              htmlFor="content"
+              className="block text-xs font-semibold uppercase tracking-wider text-slate-600"
+            >
+              Feedback Content *
+            </label>
+            <span className="text-[11px] text-slate-400 font-mono">
+              {contentLength} chars
+            </span>
+          </div>
+          <textarea
+            id="content"
+            name="content"
+            rows={4}
+            required
+            onChange={(e) => setContentLength(e.target.value.length)}
+            className="flex w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs sm:text-sm text-slate-900 shadow-xs placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
+            placeholder="Type or paste customer feedback content..."
+          />
+          {fieldErrors.content && (
+            <p className="text-xs font-medium text-rose-600">
+              {fieldErrors.content}
+            </p>
+          )}
         </div>
 
-        <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm">
-              {error}
-            </div>
-          )}
+        <Select
+          id="channel"
+          name="channel"
+          required
+          label="Ingestion Channel *"
+          error={fieldErrors.channel}
+          className="text-xs"
+        >
+          <option value="">Select channel...</option>
+          {FEEDBACK_CHANNELS.map((ch) => (
+            <option key={ch} value={ch}>
+              {ch.charAt(0).toUpperCase() + ch.slice(1)}
+            </option>
+          ))}
+        </Select>
 
-          <div>
-            <label htmlFor="content" className="block text-sm font-medium text-gray-700">
-              Content *
-            </label>
-            <textarea
-              id="content"
-              name="content"
-              rows={4}
-              required
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Enter feedback content..."
-            />
-            {fieldErrors.content && (
-              <p className="mt-1 text-sm text-red-600">{fieldErrors.content}</p>
-            )}
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Input
+            id="sourceRef"
+            name="sourceRef"
+            type="text"
+            label="Source Reference (Optional)"
+            placeholder="e.g. TKT-1001, TWEET-402"
+            className="text-xs"
+          />
 
-          <div>
-            <label htmlFor="channel" className="block text-sm font-medium text-gray-700">
-              Channel *
-            </label>
-            <select
-              id="channel"
-              name="channel"
-              required
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="">Select channel</option>
-              {CHANNELS.map((ch) => (
-                <option key={ch} value={ch}>
-                  {ch.charAt(0).toUpperCase() + ch.slice(1)}
-                </option>
-              ))}
-            </select>
-            {fieldErrors.channel && (
-              <p className="mt-1 text-sm text-red-600">{fieldErrors.channel}</p>
-            )}
-          </div>
+          <Input
+            id="customerLabel"
+            name="customerLabel"
+            type="text"
+            label="Customer Label (Optional)"
+            placeholder="e.g. CUST-809, ACME Corp"
+            className="text-xs"
+          />
+        </div>
 
-          <div>
-            <label htmlFor="sourceRef" className="block text-sm font-medium text-gray-700">
-              Source Reference
-            </label>
-            <input
-              id="sourceRef"
-              name="sourceRef"
-              type="text"
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="e.g., TKT-1001, TWEET-2001"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="customerLabel" className="block text-sm font-medium text-gray-700">
-              Customer Label
-            </label>
-            <input
-              id="customerLabel"
-              name="customerLabel"
-              type="text"
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="e.g., CUST-001"
-            />
-          </div>
-
-          <div className="flex justify-end space-x-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 disabled:opacity-50"
-            >
-              {loading ? "Creating..." : "Create Feedback"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+          <Button
+            type="button"
+            variant="outline"
+            size="md"
+            onClick={onClose}
+            disabled={loading}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            variant="primary"
+            size="md"
+            isLoading={loading}
+            leftIcon={<Plus className="w-4 h-4" />}
+          >
+            Create Signal
+          </Button>
+        </div>
+      </form>
+    </Dialog>
   );
 }

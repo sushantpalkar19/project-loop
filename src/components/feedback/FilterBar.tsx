@@ -1,27 +1,38 @@
 "use client";
 
 import { useState } from "react";
+import { Search, Filter, RotateCcw, Calendar } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { FEEDBACK_CHANNELS, SENTIMENTS, FEEDBACK_STATUSES, SENTIMENT_LABELS } from "@/lib/constants";
+
+interface ThemeOption {
+  id: string;
+  name: string;
+  color: string;
+}
 
 interface Filters {
   search: string;
   channel: string;
   sentiment: string;
   status: string;
+  themeId: string;
   dateFrom: string;
   dateTo: string;
 }
 
 interface FilterBarProps {
   filters: Filters;
+  themes?: ThemeOption[];
   onFilterChange: (filters: Filters) => void;
   onApply: () => void;
 }
 
-const CHANNELS = ["email", "survey", "social", "api", "manual", "chat"];
-const SENTIMENTS = ["POS", "NEU", "NEG"];
-const STATUSES = ["NEW", "REVIEWED", "ACTIONED"];
 
-export default function FilterBar({ filters, onFilterChange, onApply }: FilterBarProps) {
+
+export default function FilterBar({ filters, themes = [], onFilterChange, onApply }: FilterBarProps) {
   const [localFilters, setLocalFilters] = useState(filters);
 
   function handleChange(key: keyof Filters, value: string) {
@@ -39,6 +50,7 @@ export default function FilterBar({ filters, onFilterChange, onApply }: FilterBa
       channel: "",
       sentiment: "",
       status: "",
+      themeId: "",
       dateFrom: "",
       dateTo: "",
     };
@@ -54,87 +66,124 @@ export default function FilterBar({ filters, onFilterChange, onApply }: FilterBa
   }
 
   return (
-    <div className="bg-white shadow rounded-lg p-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="bg-white rounded-xl border border-slate-200/80 p-5 shadow-xs space-y-4">
+      <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+        <Filter className="w-4 h-4 text-indigo-600" />
+        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+          Filter & Search Feedback Signals
+        </h3>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
         {/* Search */}
-        <div className="lg:col-span-2">
-          <label htmlFor="search" className="block text-sm font-medium text-gray-700">
-            Search
-          </label>
-          <input
+        <div className="sm:col-span-2 lg:col-span-2">
+          <Input
             id="search"
-            type="text"
             value={localFilters.search}
             onChange={(e) => handleChange("search", e.target.value)}
             onKeyDown={handleKeyDown}
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+            leftIcon={<Search className="w-4 h-4 text-slate-400" />}
             placeholder="Search feedback content..."
+            className="h-9 text-xs"
           />
         </div>
 
         {/* Channel */}
         <div>
-          <label htmlFor="channel" className="block text-sm font-medium text-gray-700">
-            Channel
-          </label>
-          <select
+          <Select
             id="channel"
             value={localFilters.channel}
             onChange={(e) => handleChange("channel", e.target.value)}
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+            className="h-9 text-xs"
           >
             <option value="">All channels</option>
-            {CHANNELS.map((ch) => (
+            {FEEDBACK_CHANNELS.map((ch) => (
               <option key={ch} value={ch}>
                 {ch.charAt(0).toUpperCase() + ch.slice(1)}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
 
         {/* Sentiment */}
         <div>
-          <label htmlFor="sentiment" className="block text-sm font-medium text-gray-700">
-            Sentiment
-          </label>
-          <select
+          <Select
             id="sentiment"
             value={localFilters.sentiment}
             onChange={(e) => handleChange("sentiment", e.target.value)}
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+            className="h-9 text-xs"
           >
             <option value="">All sentiments</option>
             {SENTIMENTS.map((s) => (
               <option key={s} value={s}>
-                {s === "POS" ? "Positive" : s === "NEG" ? "Negative" : "Neutral"}
+                {SENTIMENT_LABELS[s]}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
 
         {/* Status */}
         <div>
-          <label htmlFor="status" className="block text-sm font-medium text-gray-700">
-            Status
-          </label>
-          <select
+          <Select
             id="status"
             value={localFilters.status}
             onChange={(e) => handleChange("status", e.target.value)}
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+            className="h-9 text-xs"
           >
             <option value="">All statuses</option>
-            {STATUSES.map((s) => (
+            {FEEDBACK_STATUSES.map((s) => (
               <option key={s} value={s}>
                 {s.charAt(0) + s.slice(1).toLowerCase()}
+              </option>
+            ))}
+          </Select>
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={handleApply}
+            variant="primary"
+            size="sm"
+            className="flex-1 h-9"
+          >
+            Apply
+          </Button>
+          <Button
+            onClick={handleClear}
+            variant="outline"
+            size="sm"
+            className="h-9 px-2.5"
+            title="Clear filters"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Date Range Optional Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-2 border-t border-slate-100/80">
+        <div>
+          <label htmlFor="themeId" className="block text-[11px] font-medium text-slate-500 mb-1">
+            Theme
+          </label>
+          <select
+            id="themeId"
+            value={localFilters.themeId}
+            onChange={(e) => handleChange("themeId", e.target.value)}
+            className="flex h-8 w-full rounded-lg border border-slate-300 bg-white px-3 py-1 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+          >
+            <option value="">All themes</option>
+            {themes.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
               </option>
             ))}
           </select>
         </div>
 
-        {/* Date Range */}
         <div>
-          <label htmlFor="dateFrom" className="block text-sm font-medium text-gray-700">
+          <label htmlFor="dateFrom" className="block text-[11px] font-medium text-slate-500 mb-1">
             From Date
           </label>
           <input
@@ -142,12 +191,11 @@ export default function FilterBar({ filters, onFilterChange, onApply }: FilterBa
             type="date"
             value={localFilters.dateFrom}
             onChange={(e) => handleChange("dateFrom", e.target.value)}
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+            className="flex h-8 w-full rounded-lg border border-slate-300 bg-white px-3 py-1 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
           />
         </div>
-
         <div>
-          <label htmlFor="dateTo" className="block text-sm font-medium text-gray-700">
+          <label htmlFor="dateTo" className="block text-[11px] font-medium text-slate-500 mb-1">
             To Date
           </label>
           <input
@@ -155,25 +203,9 @@ export default function FilterBar({ filters, onFilterChange, onApply }: FilterBa
             type="date"
             value={localFilters.dateTo}
             onChange={(e) => handleChange("dateTo", e.target.value)}
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+            className="flex h-8 w-full rounded-lg border border-slate-300 bg-white px-3 py-1 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
           />
         </div>
-      </div>
-
-      {/* Actions */}
-      <div className="mt-4 flex gap-2">
-        <button
-          onClick={handleApply}
-          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700"
-        >
-          Apply Filters
-        </button>
-        <button
-          onClick={handleClear}
-          className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-        >
-          Clear
-        </button>
       </div>
     </div>
   );

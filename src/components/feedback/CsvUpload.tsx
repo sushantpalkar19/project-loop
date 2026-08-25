@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { Upload, FileSpreadsheet, AlertCircle, CheckCircle2, XCircle, Trash2, FileText, Info } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface RowError {
   row: number;
@@ -25,13 +27,15 @@ export default function CsvUpload({ onImportComplete }: CsvUploadProps) {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
-  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (file) {
+  function handleFileSelect(file: File | undefined) {
+    if (file && file.name.endsWith(".csv")) {
       setSelectedFile(file);
       setError(null);
       setResult(null);
+    } else if (file) {
+      setError("Please select a valid .csv file");
     }
   }
 
@@ -77,135 +81,168 @@ export default function CsvUpload({ onImportComplete }: CsvUploadProps) {
   }
 
   return (
-    <div className="bg-white shadow rounded-lg p-6">
-      <h3 className="text-lg font-medium text-gray-900 mb-4">
-        Import from CSV
-      </h3>
-
-      {/* Format Guidance */}
-      <div className="mb-4 bg-gray-50 rounded-md p-4">
-        <p className="text-sm text-gray-700 font-medium mb-2">
-          Expected CSV format:
-        </p>
-        <code className="text-xs text-gray-600 block">
-          content,channel,customer_label,created_at
-        </code>
-        <code className="text-xs text-gray-500 block mt-1">
-          &quot;Great product!&quot;,email,CUST-001,2024-01-15
-        </code>
-        <p className="text-xs text-gray-500 mt-2">
-          • <strong>content</strong> and <strong>channel</strong> are required
-          <br />
-          • <strong>customer_label</strong> and <strong>created_at</strong> are
-          optional
-          <br />• Channels: email, survey, social, api, manual, chat
-        </p>
+    <div className="bg-white rounded-xl border border-slate-200/80 p-6 shadow-xs space-y-5 animate-in fade-in duration-150">
+      <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div className="flex items-center gap-2">
+          <FileSpreadsheet className="w-5 h-5 text-indigo-600" />
+          <h3 className="text-sm font-bold text-slate-900">
+            Bulk Import Feedback CSV
+          </h3>
+        </div>
       </div>
 
-      {/* File Input */}
-      <div className="flex items-center gap-4">
-        <div className="flex-1">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv"
-            onChange={handleFileSelect}
-            className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-          />
+      {/* CSV Schema Guidance Box */}
+      <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-4 space-y-2">
+        <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
+          <Info className="w-4 h-4 text-indigo-600" />
+          <span>Expected CSV File Format:</span>
+        </div>
+        <div className="font-mono text-[11px] bg-slate-900 text-slate-200 p-2.5 rounded-lg overflow-x-auto space-y-0.5">
+          <div className="text-indigo-300">content,channel,customer_label,created_at</div>
+          <div className="text-slate-400">&quot;Great feature update!&quot;,email,CUST-001,2024-01-15</div>
+        </div>
+        <div className="text-[11px] text-slate-500 space-y-0.5 pt-1">
+          <p>• <strong>content</strong> & <strong>channel</strong> are required fields.</p>
+          <p>• Supported Channels: email, survey, social, api, manual, chat.</p>
+        </div>
+      </div>
+
+      {/* Drag & Drop Area */}
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          setIsDragging(true);
+        }}
+        onDragLeave={() => setIsDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setIsDragging(false);
+          const file = e.dataTransfer.files?.[0];
+          handleFileSelect(file);
+        }}
+        onClick={() => fileInputRef.current?.click()}
+        className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-150 ${
+          isDragging
+            ? "border-indigo-500 bg-indigo-50/50 scale-[0.99]"
+            : selectedFile
+            ? "border-emerald-400 bg-emerald-50/30"
+            : "border-slate-300 hover:border-indigo-400 hover:bg-slate-50/50"
+        }`}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".csv"
+          onChange={(e) => handleFileSelect(e.target.files?.[0])}
+          className="hidden"
+        />
+
+        <div className="w-12 h-12 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-3 border border-indigo-100">
+          <Upload className="w-6 h-6" />
         </div>
 
-        {selectedFile && (
-          <>
-            <button
-              onClick={handleUpload}
-              disabled={loading}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 disabled:opacity-50"
-            >
-              {loading ? "Importing..." : "Upload"}
-            </button>
-            <button
-              onClick={handleClear}
-              disabled={loading}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
-            >
-              Clear
-            </button>
-          </>
+        {selectedFile ? (
+          <div className="space-y-1">
+            <p className="text-xs font-bold text-slate-900 flex items-center justify-center gap-1.5">
+              <FileText className="w-4 h-4 text-emerald-600" />
+              {selectedFile.name}
+            </p>
+            <p className="text-[11px] text-slate-500 font-mono">
+              {(selectedFile.size / 1024).toFixed(1)} KB
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-1">
+            <p className="text-xs font-semibold text-slate-800">
+              Drag & drop your CSV file here, or{" "}
+              <span className="text-indigo-600 font-bold underline">browse</span>
+            </p>
+            <p className="text-[11px] text-slate-400">
+              Supports .csv files up to 10MB
+            </p>
+          </div>
         )}
       </div>
 
-      {/* Selected File Info */}
-      {selectedFile && !loading && !result && (
-        <div className="mt-3 text-sm text-gray-600">
-          Selected: {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)}{" "}
-          KB)
+      {/* Control Buttons */}
+      {selectedFile && (
+        <div className="flex items-center justify-end gap-3 pt-2">
+          <Button
+            onClick={handleClear}
+            variant="outline"
+            size="sm"
+            disabled={loading}
+            leftIcon={<Trash2 className="w-3.5 h-3.5" />}
+          >
+            Clear File
+          </Button>
+          <Button
+            onClick={handleUpload}
+            isLoading={loading}
+            variant="primary"
+            size="md"
+            leftIcon={<Upload className="w-4 h-4" />}
+          >
+            Start Bulk Import
+          </Button>
         </div>
       )}
 
-      {/* Error State */}
+      {/* Global Error Banner */}
       {error && (
-        <div className="mt-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm">
-          {error}
+        <div className="rounded-lg bg-rose-50 border border-rose-200 p-3 flex items-center gap-2 text-rose-700 text-xs font-medium">
+          <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+          <span>{error}</span>
         </div>
       )}
 
-      {/* Loading State */}
-      {loading && (
-        <div className="mt-4 flex items-center gap-2 text-sm text-gray-600">
-          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-          Importing feedback...
-        </div>
-      )}
-
-      {/* Results */}
+      {/* Results Summary */}
       {result && (
-        <div className="mt-4 space-y-3">
-          {/* Summary */}
+        <div className="space-y-4 pt-2">
           <div
-            className={`px-4 py-3 rounded text-sm ${
+            className={`p-4 rounded-xl border flex items-center justify-between text-xs ${
               result.errorCount === 0
-                ? "bg-green-50 border border-green-200 text-green-700"
-                : "bg-yellow-50 border border-yellow-200 text-yellow-700"
+                ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                : "bg-amber-50 border-amber-200 text-amber-800"
             }`}
           >
-            <p className="font-medium">
-              Import Complete
-            </p>
-            <p className="mt-1">
-              ✓ {result.successCount} imported
-              {result.errorCount > 0 && (
-                <> · ✗ {result.errorCount} failed</>
+            <div className="flex items-center gap-2">
+              {result.errorCount === 0 ? (
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+              ) : (
+                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
               )}
-            </p>
+              <div>
+                <span className="font-bold block">
+                  Import Process Completed ({result.totalRows} rows processed)
+                </span>
+                <span className="text-[11px]">
+                  ✓ {result.successCount} imported successfully
+                  {result.errorCount > 0 && <> · ✗ {result.errorCount} rows failed</>}
+                </span>
+              </div>
+            </div>
           </div>
 
-          {/* Row Errors */}
+          {/* Row Errors Table */}
           {result.errors.length > 0 && (
-            <div className="bg-red-50 border border-red-200 rounded overflow-hidden">
-              <div className="px-4 py-2 bg-red-100 text-red-800 text-sm font-medium">
-                Row Validation Errors
+            <div className="rounded-xl border border-rose-200 overflow-hidden bg-rose-50/40">
+              <div className="px-4 py-2 bg-rose-100/70 border-b border-rose-200 text-rose-900 text-xs font-bold">
+                Row Validation Error Report
               </div>
-              <div className="max-h-60 overflow-y-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-red-50">
+              <div className="max-h-48 overflow-y-auto">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-rose-50 text-rose-800 font-semibold border-b border-rose-100">
                     <tr>
-                      <th className="px-4 py-2 text-left text-red-800">
-                        Row
-                      </th>
-                      <th className="px-4 py-2 text-left text-red-800">
-                        Errors
-                      </th>
+                      <th className="px-4 py-2 w-16">Row</th>
+                      <th className="px-4 py-2">Validation Errors</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-red-100">
+                  <tbody className="divide-y divide-rose-100 text-rose-700 font-mono text-[11px]">
                     {result.errors.map((err) => (
                       <tr key={err.row}>
-                        <td className="px-4 py-2 text-red-700 font-medium">
-                          {err.row}
-                        </td>
-                        <td className="px-4 py-2 text-red-600">
-                          {err.errors.join("; ")}
-                        </td>
+                        <td className="px-4 py-2 font-bold">{err.row}</td>
+                        <td className="px-4 py-2">{err.errors.join("; ")}</td>
                       </tr>
                     ))}
                   </tbody>

@@ -8,8 +8,16 @@ import FeedbackDetail from "@/components/feedback/FeedbackDetail";
 import FilterBar from "@/components/feedback/FilterBar";
 import Pagination from "@/components/feedback/Pagination";
 import CsvUpload from "@/components/feedback/CsvUpload";
+import { Button } from "@/components/ui/button";
+import { Plus, Upload, AlertCircle, RefreshCw, Layers, Zap } from "lucide-react";
 
 // ── Types ─────────────────────────────────────
+
+interface ThemeOption {
+  id: string;
+  name: string;
+  color: string;
+}
 
 interface FeedbackItem {
   id: string;
@@ -19,6 +27,9 @@ interface FeedbackItem {
   customerLabel: string | null;
   sentiment: string;
   sentimentScore: number;
+  confidence: number | null;
+  urgency: string;
+  shortSummary: string | null;
   status: string;
   createdAt: string;
   updatedAt: string;
@@ -40,6 +51,7 @@ interface Filters {
   channel: string;
   sentiment: string;
   status: string;
+  themeId: string;
   dateFrom: string;
   dateTo: string;
 }
@@ -62,6 +74,7 @@ export default function FeedbackPage() {
     channel: "",
     sentiment: "",
     status: "",
+    themeId: "",
     dateFrom: "",
     dateTo: "",
   });
@@ -72,6 +85,25 @@ export default function FeedbackPage() {
   const [selectedFeedback, setSelectedFeedback] =
     useState<FeedbackItem | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [simulating, setSimulating] = useState(false);
+  const [themes, setThemes] = useState<ThemeOption[]>([]);
+
+  // ── Fetch themes on mount
+
+  useEffect(() => {
+    async function fetchThemes() {
+      try {
+        const res = await fetch("/api/themes");
+        if (res.ok) {
+          const data = await res.json();
+          setThemes(data.themes);
+        }
+      } catch {
+        // Themes are non-critical; silently ignore failure
+      }
+    }
+    fetchThemes();
+  }, []);
 
   // ── Fetch Feedback ──────────────────────────
 
@@ -89,6 +121,7 @@ export default function FeedbackPage() {
         if (filters.channel) params.set("channel", filters.channel);
         if (filters.sentiment) params.set("sentiment", filters.sentiment);
         if (filters.status) params.set("status", filters.status);
+        if (filters.themeId) params.set("themeId", filters.themeId);
         if (filters.dateFrom) params.set("dateFrom", filters.dateFrom);
         if (filters.dateTo) params.set("dateTo", filters.dateTo);
 
@@ -143,88 +176,124 @@ export default function FeedbackPage() {
     setRefreshKey((k) => k + 1);
   }
 
+  async function handleSimulate() {
+    setSimulating(true);
+    try {
+      const response = await fetch("/api/feedback/simulate", {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Simulation failed");
+      }
+
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Simulation failed");
+    } finally {
+      setSimulating(false);
+    }
+  }
+
   // ── Render ──────────────────────────────────
 
   const canCreate = role === "ADMIN" || role === "ANALYST";
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">
-                Feedback Inbox
-              </h1>
-              <p className="text-sm text-gray-500 mt-1">
-                {pagination.total} total records
-              </p>
-            </div>
-            {canCreate && (
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowCsvUpload(!showCsvUpload)}
-                  className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 text-sm font-medium"
-                >
-                  {showCsvUpload ? "Hide Upload" : "Import CSV"}
-                </button>
-                <button
-                  onClick={() => setShowCreateForm(true)}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
-                >
-                  Add Feedback
-                </button>
-              </div>
-            )}
-          </div>
+    <div className="space-y-6 animate-in fade-in duration-150">
+      {/* Header Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white rounded-xl border border-slate-200/80 p-6 shadow-xs">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+            Feedback Inbox
+          </h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Showing <span className="font-semibold text-slate-800">{pagination.total}</span> recorded feedback signals in your workspace
+          </p>
         </div>
-      </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* CSV Upload Section */}
-        {showCsvUpload && canCreate && (
-          <div className="mb-6">
-            <CsvUpload onImportComplete={handleImportComplete} />
+        {canCreate && (
+          <div className="flex items-center gap-2.5">
+            <Button
+              onClick={() => setShowCsvUpload(!showCsvUpload)}
+              variant="outline"
+              size="md"
+              leftIcon={<Upload className="w-4 h-4 text-slate-600" />}
+            >
+              {showCsvUpload ? "Hide CSV Import" : "Import CSV"}
+            </Button>
+            <Button
+              onClick={handleSimulate}
+              isLoading={simulating}
+              variant="outline"
+              size="md"
+              leftIcon={<Zap className="w-4 h-4 text-amber-500" />}
+            >
+              Simulate Ingestion
+            </Button>
+            <Button
+              onClick={() => setShowCreateForm(true)}
+              variant="primary"
+              size="md"
+              leftIcon={<Plus className="w-4 h-4" />}
+            >
+              Add Feedback
+            </Button>
           </div>
         )}
+      </div>
 
-        {/* Filters */}
-        <FilterBar
-          filters={filters}
-          onFilterChange={handleFilterChange}
-          onApply={() => fetchFeedback(1)}
+      {/* CSV Upload Section */}
+      {showCsvUpload && canCreate && (
+        <div className="animate-in fade-in slide-in-from-top-2 duration-150">
+          <CsvUpload onImportComplete={handleImportComplete} />
+        </div>
+      )}
+
+      {/* Filters */}
+      <FilterBar
+        filters={filters}
+        themes={themes}
+        onFilterChange={handleFilterChange}
+        onApply={() => fetchFeedback(1)}
+      />
+
+      {/* Error Message Alert */}
+      {error && (
+        <div className="rounded-xl bg-rose-50 border border-rose-200 p-4 flex items-center justify-between text-rose-700 text-xs font-medium shadow-xs">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>{error}</span>
+          </div>
+          <Button
+            onClick={() => fetchFeedback(1)}
+            variant="outline"
+            size="sm"
+            className="border-rose-200 text-rose-700 hover:bg-rose-100"
+            leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
+          >
+            Retry
+          </Button>
+        </div>
+      )}
+
+      {/* Feedback List Container */}
+      <FeedbackList
+        feedback={feedback}
+        loading={loading}
+        onSelect={setSelectedFeedback}
+        userRole={role}
+      />
+
+      {/* Pagination Container */}
+      {pagination.totalPages > 1 && (
+        <Pagination
+          currentPage={pagination.page}
+          totalPages={pagination.totalPages}
+          onPageChange={handlePageChange}
         />
-
-        {/* Error Message */}
-        {error && (
-          <div className="mt-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-            {error}
-          </div>
-        )}
-
-        {/* Feedback List */}
-        <div className="mt-4">
-          <FeedbackList
-            feedback={feedback}
-            loading={loading}
-            onSelect={setSelectedFeedback}
-            userRole={role}
-          />
-        </div>
-
-        {/* Pagination */}
-        {pagination.totalPages > 1 && (
-          <div className="mt-6">
-            <Pagination
-              currentPage={pagination.page}
-              totalPages={pagination.totalPages}
-              onPageChange={handlePageChange}
-            />
-          </div>
-        )}
-      </div>
+      )}
 
       {/* Create Form Modal */}
       {showCreateForm && (

@@ -15,12 +15,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/permissions";
 import { db } from "@/lib/db";
+import { FEEDBACK_CHANNELS } from "@/lib/constants";
+import { classifyBatch } from "@/lib/ai/integration";
 
 // ── Constants ─────────────────────────────────
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const MAX_ROWS = 1000;
-const VALID_CHANNELS = ["email", "survey", "social", "api", "manual", "chat"];
 
 // ── Types ─────────────────────────────────────
 
@@ -126,9 +127,9 @@ function validateRow(row: CsvRow, rowNum: number): string[] {
   // Channel is required
   if (!row.channel || row.channel.trim() === "") {
     errors.push("channel is required");
-  } else if (!VALID_CHANNELS.includes(row.channel.toLowerCase())) {
+  } else if (!FEEDBACK_CHANNELS.includes(row.channel.toLowerCase() as typeof FEEDBACK_CHANNELS[number])) {
     errors.push(
-      `channel must be one of: ${VALID_CHANNELS.join(", ")}`
+      `channel must be one of: ${FEEDBACK_CHANNELS.join(", ")}`
     );
   }
 
@@ -274,9 +275,33 @@ export async function POST(request: NextRequest) {
       });
 
       result.successCount = validRows.length;
+
+      // 8. Fetch inserted records for classification
+      // Query recent records matching the imported content to get their IDs
+      const recentCutoff = new Date(Date.now() - 60 * 1000); // 60 seconds ago
+      const insertedRecords = await db.feedback.findMany({
+        where: {
+          workspaceId: user.workspaceId,
+          createdAt: { gte: recentCutoff },
+          content: {
+            in: validRows.map((r) => r.content),
+          },
+        },
+        select: {
+          id: true,
+          content: true,
+        },
+      });
+
+      // 9. Classify imported records (fire-and-forget, non-blocking)
+      // Classification runs in the background after the response is sent.
+      // Each record is classified independently — failures don't stop others.
+      if (insertedRecords.length > 0) {
+        classifyBatch(insertedRecords, user.workspaceId);
+      }
     }
 
-    // 8. Return result
+    // 10. Return result
     return NextResponse.json({
       message: `Import complete: ${result.successCount} imported, ${result.errorCount} failed`,
       result,

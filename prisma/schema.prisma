@@ -32,6 +32,13 @@ enum FeedbackStatus {
   ACTIONED
 }
 
+enum Urgency {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
 // ── Workspace ─────────────────────────────────
 // Multi-tenant root. Every tenant-owned entity scopes to workspaceId.
 
@@ -84,6 +91,9 @@ model Feedback {
   customerLabel  String? // anonymized customer identifier
   sentiment      Sentiment      @default(NEU)
   sentimentScore Float          @default(0) // range: -1.0 to 1.0
+  confidence     Float? // AI classification confidence (0 to 1), null until classified
+  urgency        Urgency        @default(LOW)
+  shortSummary   String? // AI-generated short summary of feedback
   status         FeedbackStatus @default(NEW)
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt

@@ -15,6 +15,7 @@ import { PrismaClient } from "../src/generated/prisma/client";
 import { Role, Sentiment, FeedbackStatus } from "../src/generated/prisma/enums";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { createHash } from "crypto";
+import { FEEDBACK_CHANNELS } from "../src/lib/constants";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
@@ -68,7 +69,7 @@ const THEMES = [
   { name: "Mobile Experience", description: "Feedback specific to mobile app or responsive design", color: "#84CC16" },
 ];
 
-const CHANNELS = ["email", "survey", "social", "api", "manual", "chat"];
+
 
 const FEEDBACK_SAMPLES = [
   // Positive feedback
@@ -186,7 +187,7 @@ async function main() {
       data: {
         workspaceId: workspace.id,
         content: sample.content,
-        channel: pick(CHANNELS),
+        channel: pick([...FEEDBACK_CHANNELS]),
         sourceRef: sourceRefs[i % sourceRefs.length],
         customerLabel: customerLabels[i % customerLabels.length],
         sentiment: sample.sentiment,

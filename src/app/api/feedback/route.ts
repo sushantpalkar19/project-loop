@@ -10,6 +10,7 @@ import {
   createFeedbackSchema,
   feedbackQuerySchema,
 } from "@/lib/validations/feedback";
+import { classifyAndPersistSafe } from "@/lib/ai/integration";
 
 // ── POST: Create Feedback ─────────────────────
 
@@ -54,6 +55,10 @@ export async function POST(request: NextRequest) {
         updatedAt: true,
       },
     });
+
+    // 4. Classify feedback with Claude AI (async — does not block response)
+    // If classification fails, the feedback is still created with default NEU sentiment.
+    classifyAndPersistSafe(feedback.id, result.data.content, user.workspaceId);
 
     return NextResponse.json({ feedback }, { status: 201 });
   } catch (error) {
@@ -148,6 +153,9 @@ export async function GET(request: NextRequest) {
           customerLabel: true,
           sentiment: true,
           sentimentScore: true,
+          confidence: true,
+          urgency: true,
+          shortSummary: true,
           status: true,
           createdAt: true,
           updatedAt: true,

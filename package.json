@@ -16,15 +16,27 @@
     "db:reset": "prisma migrate reset"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.120.0",
+    "@gsap/react": "^2.1.2",
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
+    "@react-three/drei": "^9.122.0",
+    "@react-three/fiber": "^8.18.0",
+    "@types/three": "^0.185.4",
     "bcryptjs": "^3.0.3",
+    "clsx": "^2.1.1",
     "dotenv": "^17.4.2",
+    "framer-motion": "^13.1.1",
+    "gsap": "^3.15.0",
+    "lucide-react": "^1.33.0",
     "next": "14.2.29",
     "next-auth": "^4.24.15",
     "pg": "^8.23.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "recharts": "^3.10.1",
+    "tailwind-merge": "^3.6.0",
+    "three": "^0.185.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
