@@ -11,6 +11,7 @@
 import { db } from "@/lib/db";
 import { classifyFeedback } from "./classify";
 import { generateEmbedding, isGeminiAvailable } from "./embeddings";
+import { toPgVectorLiteral } from "./vector-search";
 import type { ClassificationResult } from "./types";
 
 // ── Theme Color Palette ───────────────────────
@@ -337,11 +338,16 @@ export async function generateAndPersistEmbedding(
   // 2. Generate embedding
   const embedding = await generateEmbedding(content);
 
-  // 3. Persist embedding using raw SQL (vector column not supported by Prisma)
+  // 3. Convert embedding to pgvector bracket notation
+  // Prisma serializes JS arrays as PostgreSQL text arrays which pgvector rejects.
+  // Bracket notation [0.1,0.1,...] is the correct pgvector input format.
+  const vectorLiteral = toPgVectorLiteral(embedding);
+
+  // 4. Persist embedding using raw SQL (vector column not supported by Prisma)
   await db.$queryRaw`
     INSERT INTO "Embedding" (id, "feedbackId", vector)
-    VALUES (gen_random_uuid()::text, ${feedbackId}, ${embedding}::vector)
-    ON CONFLICT ("feedbackId") DO UPDATE SET vector = ${embedding}::vector
+    VALUES (gen_random_uuid()::text, ${feedbackId}, ${vectorLiteral}::vector)
+    ON CONFLICT ("feedbackId") DO UPDATE SET vector = ${vectorLiteral}::vector
   `;
 }
 

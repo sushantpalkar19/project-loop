@@ -156,7 +156,7 @@ model FeedbackTheme {
 model Embedding {
   id         String                      @id @default(cuid())
   feedbackId String                      @unique
-  vector     Unsupported("vector(1536)") // OpenAI ada-002 dimension
+  vector     Unsupported("vector(1536)") // Gemini embedding-001 dimension
 
   // Relations
   feedback Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)

@@ -60,9 +60,21 @@ export async function POST(request: NextRequest) {
     // If classification fails, the feedback is still created with default NEU sentiment.
     classifyAndPersistSafe(feedback.id, result.data.content, user.workspaceId);
 
-    // 5. Generate embedding for semantic search (async — does not block response)
-    // If embedding generation fails, the feedback is still created without an embedding.
-    generateAndPersistEmbeddingSafe(feedback.id, result.data.content);
+    // 5. Generate embedding for semantic search (synchronous — blocks response)
+    // This ensures feedback is fully indexed before returning to user.
+    // If embedding generation fails, return an error to the user.
+    try {
+      const { generateAndPersistEmbedding } = await import("@/lib/ai/integration");
+      await generateAndPersistEmbedding(feedback.id, result.data.content);
+    } catch (error) {
+      console.error("[Feedback Creation] Embedding generation failed:", error);
+      // Delete the feedback since embedding failed - user should retry
+      await db.feedback.delete({ where: { id: feedback.id } });
+      return NextResponse.json(
+        { error: "Failed to generate embedding for semantic search. Please try again." },
+        { status: 502 }
+      );
+    }
 
     return NextResponse.json({ feedback }, { status: 201 });
   } catch (error) {

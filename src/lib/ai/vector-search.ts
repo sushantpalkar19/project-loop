@@ -38,7 +38,7 @@ export interface SearchResult {
  *
  * This function produces a safe string for use as a parameterized value.
  */
-function toPgVectorLiteral(values: number[]): string {
+export function toPgVectorLiteral(values: number[]): string {
   return `[${values.join(",")}]`;
 }
 
