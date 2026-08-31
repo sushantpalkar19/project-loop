@@ -10,7 +10,7 @@ import {
   createFeedbackSchema,
   feedbackQuerySchema,
 } from "@/lib/validations/feedback";
-import { classifyAndPersistSafe } from "@/lib/ai/integration";
+import { classifyAndPersistSafe, generateAndPersistEmbeddingSafe } from "@/lib/ai/integration";
 
 // ── POST: Create Feedback ─────────────────────
 
@@ -59,6 +59,10 @@ export async function POST(request: NextRequest) {
     // 4. Classify feedback with Claude AI (async — does not block response)
     // If classification fails, the feedback is still created with default NEU sentiment.
     classifyAndPersistSafe(feedback.id, result.data.content, user.workspaceId);
+
+    // 5. Generate embedding for semantic search (async — does not block response)
+    // If embedding generation fails, the feedback is still created without an embedding.
+    generateAndPersistEmbeddingSafe(feedback.id, result.data.content);
 
     return NextResponse.json({ feedback }, { status: 201 });
   } catch (error) {

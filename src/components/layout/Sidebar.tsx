@@ -53,8 +53,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
       label: "Ask LOOP",
       href: "/ask",
       icon: Sparkles,
-      active: false,
-      soon: true,
+      active: pathname.startsWith("/ask"),
     },
     {
       label: "Reports",

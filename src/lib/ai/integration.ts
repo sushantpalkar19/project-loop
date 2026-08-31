@@ -3,12 +3,14 @@
  *
  * Server-side module that ties Claude classification to the database.
  * Handles: classification → feedback update → theme creation/reuse → FeedbackTheme association.
+ * Also handles: embedding generation for semantic search.
  *
  * This module should NEVER be imported into "use client" components.
  */
 
 import { db } from "@/lib/db";
 import { classifyFeedback } from "./classify";
+import { generateEmbedding, isGeminiAvailable } from "./embeddings";
 import type { ClassificationResult } from "./types";
 
 // ── Theme Color Palette ───────────────────────
@@ -303,6 +305,114 @@ export async function classifyBatch(
   }
 
   return { classified, failed };
+}
+
+// ── Embedding Generation ─────────────────────
+
+/**
+ * Generate an embedding for a feedback record and persist it to the database.
+ *
+ * This is designed to be called asynchronously after feedback creation.
+ * If embedding generation fails, the original feedback is left unchanged.
+ *
+ * Steps:
+ * 1. Generate embedding via Gemini
+ * 2. Persist embedding to Embedding table using raw SQL (vector column not supported by Prisma)
+ *
+ * @param feedbackId - The feedback record to embed
+ * @param content - The feedback text content
+ */
+export async function generateAndPersistEmbedding(
+  feedbackId: string,
+  content: string
+): Promise<void> {
+  // 1. Check if Gemini is available
+  if (!isGeminiAvailable()) {
+    console.log(
+      `[AI Embedding] Skipped for feedback ${feedbackId}: GEMINI_API_KEY not configured`
+    );
+    return;
+  }
+
+  // 2. Generate embedding
+  const embedding = await generateEmbedding(content);
+
+  // 3. Persist embedding using raw SQL (vector column not supported by Prisma)
+  await db.$queryRaw`
+    INSERT INTO "Embedding" (id, "feedbackId", vector)
+    VALUES (gen_random_uuid()::text, ${feedbackId}, ${embedding}::vector)
+    ON CONFLICT ("feedbackId") DO UPDATE SET vector = ${embedding}::vector
+  `;
+}
+
+/**
+ * Fire-and-forget wrapper for generateAndPersistEmbedding.
+ * Catches all errors and logs them server-side.
+ * Never throws — safe to call from async contexts without awaiting.
+ *
+ * @param feedbackId - The feedback record to embed
+ * @param content - The feedback text content
+ */
+export async function generateAndPersistEmbeddingSafe(
+  feedbackId: string,
+  content: string
+): Promise<void> {
+  try {
+    await generateAndPersistEmbedding(feedbackId, content);
+  } catch (error) {
+    // Log controlled server-side error — never expose to client
+    console.error(
+      `[AI Embedding] Failed for feedback ${feedbackId}:`,
+      error instanceof Error ? error.message : "Unknown error"
+    );
+  }
+}
+
+// ── Batch Embedding ─────────────────────────
+
+/**
+ * Generate embeddings for multiple feedback records with bounded concurrency.
+ * Each record is embedded independently — one failure does not stop others.
+ *
+ * Designed for CSV import where many records need embeddings.
+ * Processes records in batches of BATCH_CONCURRENCY with a small delay between batches.
+ *
+ * @param records - Array of { id, content } to embed
+ * @returns Number of successfully embedded records
+ */
+export async function embedBatch(
+  records: Array<{ id: string; content: string }>
+): Promise<{ embedded: number; failed: number }> {
+  let embedded = 0;
+  let failed = 0;
+
+  // Process in batches
+  for (let i = 0; i < records.length; i += BATCH_CONCURRENCY) {
+    const batch = records.slice(i, i + BATCH_CONCURRENCY);
+
+    const results = await Promise.allSettled(
+      batch.map((record) => generateAndPersistEmbedding(record.id, record.content))
+    );
+
+    for (const result of results) {
+      if (result.status === "fulfilled") {
+        embedded++;
+      } else {
+        failed++;
+        console.error(
+          `[AI Batch Embedding] Record failed:`,
+          result.reason instanceof Error ? result.reason.message : "Unknown error"
+        );
+      }
+    }
+
+    // Delay between batches (except after the last batch)
+    if (i + BATCH_CONCURRENCY < records.length) {
+      await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY_MS));
+    }
+  }
+
+  return { embedded, failed };
 }
 
 // ── Helpers ───────────────────────────────────
