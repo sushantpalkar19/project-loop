@@ -37,6 +37,9 @@ export function Topbar({ onMenuToggle }: TopbarProps) {
     if (pathname.startsWith("/dashboard")) {
       return { title: "Dashboard", subtitle: "Customer feedback intelligence overview" };
     }
+    if (pathname.startsWith("/reports")) {
+      return { title: "Reports", subtitle: "Voice-of-Customer reporting" };
+    }
     return { title: "Project LOOP", subtitle: "AI Customer Feedback Platform" };
   };
 

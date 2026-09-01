@@ -59,8 +59,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
       label: "Reports",
       href: "/reports",
       icon: BarChart3,
-      active: false,
-      soon: true,
+      active: pathname.startsWith("/reports"),
     },
     {
       label: "Settings",
