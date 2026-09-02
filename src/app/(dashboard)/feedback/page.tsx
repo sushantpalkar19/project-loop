@@ -9,7 +9,9 @@ import FilterBar from "@/components/feedback/FilterBar";
 import Pagination from "@/components/feedback/Pagination";
 import CsvUpload from "@/components/feedback/CsvUpload";
 import { Button } from "@/components/ui/button";
-import { Plus, Upload, AlertCircle, RefreshCw, Layers, Zap } from "lucide-react";
+import { useToast } from "@/components/ui/toast";
+import { ErrorState } from "@/components/ui/error-state";
+import { Plus, Upload, RefreshCw, Zap } from "lucide-react";
 
 // ── Types ─────────────────────────────────────
 
@@ -61,6 +63,7 @@ interface Filters {
 export default function FeedbackPage() {
   const { data: session } = useSession();
   const role = session?.user?.role;
+  const { success, error: toastError, info } = useToast();
 
   const [feedback, setFeedback] = useState<FeedbackItem[]>([]);
   const [pagination, setPagination] = useState<PaginationData>({
@@ -135,12 +138,14 @@ export default function FeedbackPage() {
         setFeedback(data.feedback);
         setPagination(data.pagination);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "An error occurred");
+        const msg = err instanceof Error ? err.message : "An error occurred";
+        setError(msg);
+        toastError(msg, "Inbox Load Error");
       } finally {
         setLoading(false);
       }
     },
-    [filters]
+    [filters, toastError]
   );
 
   useEffect(() => {
@@ -160,24 +165,29 @@ export default function FeedbackPage() {
   function handleCreated() {
     setShowCreateForm(false);
     setRefreshKey((k) => k + 1);
+    success("New feedback signal submitted and classified.", "Feedback Created");
   }
 
   function handleUpdated() {
     setSelectedFeedback(null);
     setRefreshKey((k) => k + 1);
+    success("Feedback updated successfully.", "Workflow Updated");
   }
 
   function handleDeleted() {
     setSelectedFeedback(null);
     setRefreshKey((k) => k + 1);
+    success("Feedback entry deleted.", "Signal Removed");
   }
 
   function handleImportComplete() {
     setRefreshKey((k) => k + 1);
+    success("CSV batch imported and AI classified successfully.", "CSV Import Complete");
   }
 
   async function handleSimulate() {
     setSimulating(true);
+    info("Simulating multi-channel feedback ingestion...", "Ingestion Processing");
     try {
       const response = await fetch("/api/feedback/simulate", {
         method: "POST",
@@ -189,8 +199,11 @@ export default function FeedbackPage() {
       }
 
       setRefreshKey((k) => k + 1);
+      success("Simulated incoming customer feedback signals.", "Simulation Complete");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Simulation failed");
+      const msg = err instanceof Error ? err.message : "Simulation failed";
+      setError(msg);
+      toastError(msg, "Simulation Error");
     } finally {
       setSimulating(false);
     }
@@ -203,18 +216,18 @@ export default function FeedbackPage() {
   return (
     <div className="space-y-6 animate-in fade-in duration-150">
       {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white rounded-xl border border-slate-200/80 p-6 shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white rounded-2xl border border-slate-200/80 p-6 shadow-2xs">
         <div>
           <h1 className="text-xl font-bold text-slate-900 tracking-tight">
             Feedback Inbox
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Showing <span className="font-semibold text-slate-800">{pagination.total}</span> recorded feedback signals in your workspace
+            Showing <span className="font-bold text-slate-800">{pagination.total}</span> recorded feedback signals in your workspace
           </p>
         </div>
 
         {canCreate && (
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2.5">
             <Button
               onClick={() => setShowCsvUpload(!showCsvUpload)}
               variant="outline"
@@ -259,23 +272,13 @@ export default function FeedbackPage() {
         onApply={() => fetchFeedback(1)}
       />
 
-      {/* Error Message Alert */}
+      {/* Error State Component */}
       {error && (
-        <div className="rounded-xl bg-rose-50 border border-rose-200 p-4 flex items-center justify-between text-rose-700 text-xs font-medium shadow-xs">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-            <span>{error}</span>
-          </div>
-          <Button
-            onClick={() => fetchFeedback(1)}
-            variant="outline"
-            size="sm"
-            className="border-rose-200 text-rose-700 hover:bg-rose-100"
-            leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
-          >
-            Retry
-          </Button>
-        </div>
+        <ErrorState
+          title="Unable to load feedback inbox"
+          message={error}
+          onRetry={() => fetchFeedback(1)}
+        />
       )}
 
       {/* Feedback List Container */}

@@ -81,9 +81,15 @@ export default function FeedbackList({
                 className="group hover:bg-slate-50/80 transition-colors"
               >
                 <TableCell className="font-medium text-slate-900 py-3.5">
-                  <p className="line-clamp-2 text-xs sm:text-sm leading-relaxed">
+                  <p className="line-clamp-2 text-xs sm:text-sm leading-relaxed font-semibold">
                     {item.content}
                   </p>
+                  {item.shortSummary && (
+                    <p className="text-[11px] text-slate-500 mt-1 line-clamp-1 bg-slate-50 border border-slate-200/60 rounded px-2 py-0.5 w-fit">
+                      <span className="font-bold text-indigo-600 mr-1">AI Summary:</span>
+                      {item.shortSummary}
+                    </p>
+                  )}
                   {item.sourceRef && (
                     <span className="inline-flex items-center gap-1 text-[11px] text-slate-400 mt-1 font-mono">
                       <Hash className="w-3 h-3 text-slate-400" />

@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  AlertCircle,
   BarChart3,
   Calendar,
   FileText,
@@ -22,8 +21,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { DateRangePicker } from "@/components/ui/date-picker";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/components/ui/toast";
+import { ErrorState } from "@/components/ui/error-state";
 import { cn } from "@/lib/utils";
 import type { VoiceOfCustomerReportContent } from "@/lib/validations/reports";
 
@@ -65,10 +66,46 @@ const PRIORITY_VARIANTS: Record<
   LOW: "neutral",
 };
 
+function getDefaultDateRange() {
+  const end = new Date();
+  const start = new Date();
+  start.setUTCDate(end.getUTCDate() - 29);
+  return {
+    startDate: start.toISOString().slice(0, 10),
+    endDate: end.toISOString().slice(0, 10),
+  };
+}
+
+function formatDate(isoString: string) {
+  return new Date(isoString).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function formatDateTime(isoString: string) {
+  return new Date(isoString).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function sentimentVariant(sentiment: SentimentKey) {
+  if (sentiment === "POS") return "pos";
+  if (sentiment === "NEG") return "neg";
+  return "neu";
+}
+
 export default function ReportsClient() {
   const { data: session } = useSession();
   const role = session?.user?.role;
   const canGenerate = role === "ADMIN" || role === "ANALYST";
+  const { success, error: toastError, info } = useToast();
+
   const defaultDates = useMemo(() => getDefaultDateRange(), []);
   const [startDate, setStartDate] = useState(defaultDates.startDate);
   const [endDate, setEndDate] = useState(defaultDates.endDate);
@@ -96,11 +133,13 @@ export default function ReportsClient() {
       setReports(nextReports);
       setSelectedReport((current) => current ?? nextReports[0] ?? null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load reports");
+      const msg = err instanceof Error ? err.message : "Failed to load reports";
+      setError(msg);
+      toastError(msg, "Reports Load Error");
     } finally {
       setLoadingReports(false);
     }
-  }, []);
+  }, [toastError]);
 
   useEffect(() => {
     loadReports();
@@ -110,21 +149,28 @@ export default function ReportsClient() {
     setError(null);
 
     if (!canGenerate) {
-      setError("You do not have permission to generate reports.");
+      const msg = "You do not have permission to generate reports.";
+      setError(msg);
+      toastError(msg, "Access Restricted");
       return;
     }
 
     if (!startDate || !endDate) {
-      setError("Select both a start date and an end date.");
+      const msg = "Select both a start date and an end date.";
+      setError(msg);
+      toastError(msg, "Invalid Date Range");
       return;
     }
 
     if (startDate > endDate) {
-      setError("End date must be on or after start date.");
+      const msg = "End date must be on or after start date.";
+      setError(msg);
+      toastError(msg, "Invalid Date Range");
       return;
     }
 
     setGenerating(true);
+    info("Generating VoC narrative with Gemini AI...", "Report Generation Started");
 
     try {
       const response = await fetch("/api/reports", {
@@ -144,81 +190,86 @@ export default function ReportsClient() {
         report,
         ...current.filter((item) => item.id !== report.id),
       ]);
+      success("Voice-of-Customer report generated successfully.", "Report Ready");
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to generate report"
-      );
+      const msg = err instanceof Error ? err.message : "Failed to generate report";
+      setError(msg);
+      toastError(msg, "Generation Error");
     } finally {
       setGenerating(false);
     }
   }
 
+  function handleDateRangeChange({ startDate: s, endDate: e }: { startDate: string; endDate: string }) {
+    setStartDate(s);
+    setEndDate(e);
+  }
+
   return (
     <div className="space-y-6 animate-in fade-in duration-150">
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white rounded-xl border border-slate-200/80 p-6 shadow-xs">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white rounded-2xl border border-slate-200/80 p-6 shadow-2xs">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-lg bg-indigo-600 flex items-center justify-center text-white shadow-sm">
+            <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-md">
               <BarChart3 className="w-4 h-4" />
             </div>
             <h1 className="text-xl font-bold text-slate-900 tracking-tight">
               Voice-of-Customer Reports
             </h1>
           </div>
-          <p className="text-xs text-slate-500 max-w-2xl">
+          <p className="text-xs text-slate-500 max-w-2xl leading-relaxed">
             Generate period-based customer feedback reports from workspace data,
             saved with structured evidence for future export.
           </p>
         </div>
 
-        <Badge variant={canGenerate ? "primary" : "neutral"} size="sm" className="w-fit">
-          {canGenerate ? "Gemini narrative" : "Read-only"}
+        <Badge variant={canGenerate ? "primary" : "neutral"} size="sm" className="w-fit font-bold">
+          {canGenerate ? "Gemini narrative enabled" : "Read-only"}
         </Badge>
       </div>
 
       {canGenerate && (
         <Card>
           <CardHeader className="pb-4">
-            <CardTitle className="text-base flex items-center gap-2">
+            <CardTitle className="text-base flex items-center gap-2 font-bold">
               <Calendar className="w-4 h-4 text-indigo-600" />
-              Reporting Period
+              Reporting Period & Controls
             </CardTitle>
             <CardDescription>
-              Select the date range used to fetch and summarize feedback.
+              Select the date range used to fetch and summarize customer feedback.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-col md:flex-row md:items-end gap-3">
-              <Input
-                label="Start Date"
-                type="date"
-                value={startDate}
-                onChange={(event) => setStartDate(event.target.value)}
-                disabled={generating}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <DateRangePicker
+                startDate={startDate}
+                endDate={endDate}
+                onChange={handleDateRangeChange}
+                onClear={() => {
+                  const d = getDefaultDateRange();
+                  setStartDate(d.startDate);
+                  setEndDate(d.endDate);
+                }}
               />
-              <Input
-                label="End Date"
-                type="date"
-                value={endDate}
-                onChange={(event) => setEndDate(event.target.value)}
-                disabled={generating}
-              />
-              <div className="flex items-center gap-2 md:pb-0.5">
+
+              <div className="flex items-center gap-2">
                 <Button
                   onClick={handleGenerate}
                   isLoading={generating}
                   disabled={generating}
                   leftIcon={<Sparkles className="w-4 h-4" />}
-                  className="h-10"
+                  variant="primary"
+                  size="md"
+                  className="font-bold"
                 >
                   Generate Report
                 </Button>
                 <Button
                   onClick={loadReports}
                   variant="outline"
+                  size="md"
                   disabled={loadingReports || generating}
                   leftIcon={<RefreshCw className="w-4 h-4" />}
-                  className="h-10"
                 >
                   Refresh
                 </Button>
@@ -229,20 +280,11 @@ export default function ReportsClient() {
       )}
 
       {error && (
-        <div className="rounded-xl bg-rose-50 border border-rose-200 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-rose-700 text-xs font-medium shadow-xs">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-            <span>{error}</span>
-          </div>
-          <Button
-            onClick={() => setError(null)}
-            variant="outline"
-            size="sm"
-            className="border-rose-200 text-rose-700 hover:bg-rose-100"
-          >
-            Dismiss
-          </Button>
-        </div>
+        <ErrorState
+          title="Unable to load reports"
+          message={error}
+          onRetry={loadReports}
+        />
       )}
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-6">
@@ -274,30 +316,32 @@ function ReportDisplay({ report }: { report: ReportRecord }) {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-xl border border-slate-200/80 p-6 shadow-xs">
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-2xs">
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <Badge variant="primary" size="sm">
+              <Badge variant="primary" size="sm" className="font-bold">
                 {content.reportType.replaceAll("_", " ")}
               </Badge>
               <span className="text-xs text-slate-400 font-mono">
                 v{content.schemaVersion}
               </span>
             </div>
-            <h2 className="text-lg font-bold text-slate-900">
+            <h2 className="text-lg font-bold text-slate-900 leading-snug">
               {content.title}
             </h2>
             <p className="text-xs text-slate-500 mt-1">
               Generated {formatDateTime(report.createdAt)} by{" "}
-              {report.author?.name || report.author?.email || "LOOP user"}
+              <span className="font-semibold text-slate-800">
+                {report.author?.name || report.author?.email || "LOOP user"}
+              </span>
             </p>
           </div>
           <div className="text-left md:text-right">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
               Period
             </p>
-            <p className="text-sm font-semibold text-slate-900">
+            <p className="text-sm font-bold text-slate-900">
               {content.period.label}
             </p>
           </div>
@@ -361,12 +405,12 @@ function MetricCard({
   return (
     <Card hoverEffect>
       <CardContent className="p-5">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
           {label}
         </p>
         <p
           className={cn(
-            "text-2xl font-bold mt-2",
+            "text-2xl font-extrabold mt-2",
             tone === "danger" ? "text-rose-600" : "text-slate-900"
           )}
         >
@@ -388,7 +432,7 @@ function SentimentSummary({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base flex items-center gap-2">
+        <CardTitle className="text-base flex items-center gap-2 font-bold">
           <BarChart3 className="w-4 h-4 text-indigo-600" />
           Sentiment Summary
         </CardTitle>
@@ -404,20 +448,20 @@ function SentimentSummary({
             <div key={key} className="space-y-1.5">
               <div className="flex items-center justify-between gap-3 text-xs">
                 <div className="flex items-center gap-2">
-                  <Badge variant={sentimentVariant(key)} size="sm">
+                  <Badge variant={sentimentVariant(key)} size="sm" className="font-bold">
                     {key}
                   </Badge>
-                  <span className="font-medium text-slate-700">
+                  <span className="font-semibold text-slate-700">
                     {SENTIMENT_LABELS[key]}
                   </span>
                 </div>
-                <span className="font-mono text-slate-500">
+                <span className="font-mono text-slate-500 font-medium">
                   {item.count}/{total} ({item.percentage}%)
                 </span>
               </div>
               <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
                 <div
-                  className={cn("h-full rounded-full", SENTIMENT_BAR_COLORS[key])}
+                  className={cn("h-full rounded-full transition-all duration-300", SENTIMENT_BAR_COLORS[key])}
                   style={{ width: `${item.percentage}%` }}
                 />
               </div>
@@ -435,7 +479,7 @@ function TopThemes({ content }: { content: VoiceOfCustomerReportContent }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base flex items-center gap-2">
+        <CardTitle className="text-base flex items-center gap-2 font-bold">
           <Tag className="w-4 h-4 text-purple-600" />
           Top Themes
         </CardTitle>
@@ -445,7 +489,7 @@ function TopThemes({ content }: { content: VoiceOfCustomerReportContent }) {
       </CardHeader>
       <CardContent>
         {themes.length === 0 ? (
-          <div className="flex items-center justify-center h-48 text-xs text-slate-400">
+          <div className="flex items-center justify-center h-48 text-xs text-slate-400 font-medium">
             No themes were associated with this period.
           </div>
         ) : (
@@ -458,7 +502,7 @@ function TopThemes({ content }: { content: VoiceOfCustomerReportContent }) {
                       className="w-2.5 h-2.5 rounded-full shrink-0"
                       style={{ backgroundColor: theme.color || "#6366f1" }}
                     />
-                    <span className="font-semibold text-slate-800 truncate">
+                    <span className="font-bold text-slate-800 truncate">
                       {theme.name}
                     </span>
                   </div>
@@ -468,7 +512,7 @@ function TopThemes({ content }: { content: VoiceOfCustomerReportContent }) {
                 </div>
                 <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-indigo-500"
+                    className="h-full rounded-full bg-indigo-500 transition-all duration-300"
                     style={{ width: `${theme.percentage}%` }}
                   />
                 </div>
@@ -489,17 +533,17 @@ function NarrativeSection({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base flex items-center gap-2">
+        <CardTitle className="text-base flex items-center gap-2 font-bold">
           <Sparkles className="w-4 h-4 text-indigo-600" />
-          AI Narrative
+          AI Narrative & Executive Summary
         </CardTitle>
         <CardDescription>
           Generated from the calculated statistics and selected evidence
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="rounded-xl bg-indigo-50 border border-indigo-100 p-4">
-          <p className="text-sm leading-relaxed text-indigo-950 whitespace-pre-wrap">
+        <div className="rounded-2xl bg-indigo-50/70 border border-indigo-100 p-5 shadow-2xs">
+          <p className="text-xs sm:text-sm leading-relaxed text-indigo-950 whitespace-pre-wrap font-medium">
             {content.narrative.executiveSummary}
           </p>
         </div>
@@ -508,12 +552,12 @@ function NarrativeSection({
           {content.narrative.sections.map((section) => (
             <div
               key={section.title}
-              className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2"
+              className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 space-y-2"
             >
-              <h3 className="text-sm font-semibold text-slate-900">
+              <h3 className="text-xs sm:text-sm font-bold text-slate-900">
                 {section.title}
               </h3>
-              <p className="text-sm leading-relaxed text-slate-600 whitespace-pre-wrap">
+              <p className="text-xs leading-relaxed text-slate-600 whitespace-pre-wrap">
                 {section.body}
               </p>
             </div>
@@ -522,10 +566,10 @@ function NarrativeSection({
 
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
-            <h3 className="text-sm font-semibold text-slate-900">
+            <h3 className="text-sm font-bold text-slate-900">
               Recommended Actions
             </h3>
-            <Badge variant="neutral" size="sm">
+            <Badge variant="neutral" size="sm" className="font-bold">
               {content.narrative.recommendedActions.length}
             </Badge>
           </div>
@@ -533,21 +577,21 @@ function NarrativeSection({
             {content.narrative.recommendedActions.map((action) => (
               <div
                 key={`${action.priority}-${action.title}`}
-                className="rounded-xl border border-slate-200 p-4 bg-white space-y-2"
+                className="rounded-2xl border border-slate-200 p-4 bg-white space-y-2 shadow-2xs"
               >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <h4 className="text-sm font-semibold text-slate-900">
+                  <h4 className="text-sm font-bold text-slate-900">
                     {action.title}
                   </h4>
                   <Badge
                     variant={PRIORITY_VARIANTS[action.priority]}
                     size="sm"
-                    className="w-fit"
+                    className="w-fit font-bold"
                   >
                     {action.priority}
                   </Badge>
                 </div>
-                <p className="text-sm leading-relaxed text-slate-600">
+                <p className="text-xs sm:text-sm leading-relaxed text-slate-600">
                   {action.rationale}
                 </p>
                 {action.evidenceIds.length > 0 && (
@@ -576,7 +620,7 @@ function EvidenceSection({
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <Card>
         <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
+          <CardTitle className="text-base flex items-center gap-2 font-bold">
             <FileText className="w-4 h-4 text-sky-600" />
             Representative Feedback
           </CardTitle>
@@ -588,25 +632,25 @@ function EvidenceSection({
           {content.evidence.representativeFeedback.map((item) => (
             <div
               key={item.feedbackId}
-              className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3"
+              className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 space-y-3"
             >
               <div className="flex items-center justify-between gap-2">
-                <Badge variant={sentimentVariant(item.sentiment)} size="sm">
+                <Badge variant={sentimentVariant(item.sentiment)} size="sm" className="font-bold">
                   {item.sentiment}
                 </Badge>
                 <span className="text-[11px] text-slate-400 font-mono">
                   {formatDate(item.createdAt)}
                 </span>
               </div>
-              <p className="text-sm text-slate-800 leading-relaxed">
+              <p className="text-xs sm:text-sm text-slate-800 leading-relaxed font-medium">
                 {item.shortSummary || item.content}
               </p>
               <div className="flex items-center gap-2 flex-wrap">
-                <Badge variant="neutral" size="sm">
+                <Badge variant="neutral" size="sm" className="capitalize font-mono">
                   {item.channel}
                 </Badge>
                 {item.themes.slice(0, 3).map((theme) => (
-                  <Badge key={theme.themeId} variant="primary" size="sm">
+                  <Badge key={theme.themeId} variant="primary" size="sm" className="font-semibold">
                     {theme.name}
                   </Badge>
                 ))}
@@ -618,7 +662,7 @@ function EvidenceSection({
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
+          <CardTitle className="text-base flex items-center gap-2 font-bold">
             <MessageSquareQuote className="w-4 h-4 text-amber-600" />
             Notable Quotes
           </CardTitle>
@@ -630,17 +674,17 @@ function EvidenceSection({
           {content.evidence.notableQuotes.map((quote) => (
             <div
               key={quote.feedbackId}
-              className="rounded-xl border border-slate-200 bg-white p-4 space-y-3"
+              className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3 shadow-2xs"
             >
-              <p className="text-sm text-slate-800 leading-relaxed">
+              <p className="text-xs sm:text-sm text-slate-800 leading-relaxed font-medium italic">
                 &ldquo;{quote.quote}&rdquo;
               </p>
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <Badge variant={sentimentVariant(quote.sentiment)} size="sm">
+                  <Badge variant={sentimentVariant(quote.sentiment)} size="sm" className="font-bold">
                     {quote.sentiment}
                   </Badge>
-                  <Badge variant="neutral" size="sm">
+                  <Badge variant="neutral" size="sm" className="capitalize font-mono">
                     {quote.channel}
                   </Badge>
                 </div>
@@ -670,7 +714,7 @@ function PreviousReports({
   return (
     <Card className="h-fit xl:sticky xl:top-24">
       <CardHeader>
-        <CardTitle className="text-base flex items-center gap-2">
+        <CardTitle className="text-base flex items-center gap-2 font-bold">
           <FileText className="w-4 h-4 text-indigo-600" />
           Previous Reports
         </CardTitle>
@@ -684,8 +728,8 @@ function PreviousReports({
             <Skeleton className="h-16 w-full" />
           </div>
         ) : reports.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center">
-            <p className="text-sm font-medium text-slate-700">
+          <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center">
+            <p className="text-sm font-semibold text-slate-700">
               No saved reports yet
             </p>
             <p className="text-xs text-slate-500 mt-1">
@@ -699,16 +743,16 @@ function PreviousReports({
                 key={report.id}
                 onClick={() => onSelect(report)}
                 className={cn(
-                  "w-full text-left rounded-xl border p-3 transition-colors",
+                  "w-full text-left rounded-xl border p-3.5 transition-colors",
                   selectedReportId === report.id
-                    ? "border-indigo-300 bg-indigo-50"
+                    ? "border-indigo-300 bg-indigo-50/80 shadow-2xs"
                     : "border-slate-200 bg-white hover:bg-slate-50"
                 )}
               >
-                <p className="text-xs font-semibold text-slate-900 line-clamp-2">
+                <p className="text-xs font-bold text-slate-900 line-clamp-2">
                   {report.title}
                 </p>
-                <p className="text-[11px] text-slate-500 mt-1">
+                <p className="text-[11px] text-slate-500 mt-1 font-mono">
                   {formatDate(report.createdAt)}
                 </p>
               </button>
@@ -726,11 +770,11 @@ function GeneratingState() {
       <CardContent className="p-10 flex flex-col items-center justify-center text-center gap-3 min-h-[320px]">
         <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
         <div>
-          <p className="text-sm font-semibold text-slate-900">
+          <p className="text-sm font-bold text-slate-900">
             Generating Voice-of-Customer report
           </p>
           <p className="text-xs text-slate-500 mt-1">
-            Calculating statistics and asking Gemini for the narrative.
+            Calculating statistics and asking Gemini AI for the narrative.
           </p>
         </div>
       </CardContent>
@@ -760,59 +804,18 @@ function EmptyReportState({
   return (
     <Card>
       <CardContent className="p-10 flex flex-col items-center justify-center text-center gap-3 min-h-[320px]">
-        <div className="w-14 h-14 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center">
+        <div className="w-14 h-14 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100 shadow-2xs">
           <FileText className="w-7 h-7" />
         </div>
         <div>
-          <p className="text-sm font-semibold text-slate-900">
-            {canGenerate ? "Generate your first report" : "No saved reports"}
+          <p className="text-sm font-bold text-slate-900">
+            {canGenerate ? "Generate your first VoC report" : "No saved reports"}
           </p>
           <p className="text-xs text-slate-500 max-w-sm mt-1">
-            {canGenerate
-              ? "Choose a reporting period above to create a structured report from your workspace feedback."
-              : "Saved reports for your workspace will appear here."}
+            Select a reporting period and click Generate Report to create an executive narrative.
           </p>
         </div>
       </CardContent>
     </Card>
   );
-}
-
-function sentimentVariant(sentiment: SentimentKey): "pos" | "neu" | "neg" {
-  if (sentiment === "POS") return "pos";
-  if (sentiment === "NEG") return "neg";
-  return "neu";
-}
-
-function getDefaultDateRange() {
-  const end = new Date();
-  const start = new Date();
-  start.setUTCDate(end.getUTCDate() - 29);
-
-  return {
-    startDate: toDateInputValue(start),
-    endDate: toDateInputValue(end),
-  };
-}
-
-function toDateInputValue(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(new Date(value));
-}
-
-function formatDateTime(value: string): string {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
 }

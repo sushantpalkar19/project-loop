@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Filter, RotateCcw, Calendar } from "lucide-react";
+import { Search, Filter, RotateCcw, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { DateRangePicker } from "@/components/ui/date-picker";
 import { FEEDBACK_CHANNELS, SENTIMENTS, FEEDBACK_STATUSES, SENTIMENT_LABELS } from "@/lib/constants";
 
 interface ThemeOption {
@@ -30,13 +32,12 @@ interface FilterBarProps {
   onApply: () => void;
 }
 
-
-
 export default function FilterBar({ filters, themes = [], onFilterChange, onApply }: FilterBarProps) {
   const [localFilters, setLocalFilters] = useState(filters);
 
   function handleChange(key: keyof Filters, value: string) {
-    setLocalFilters((prev) => ({ ...prev, [key]: value }));
+    const updated = { ...localFilters, [key]: value };
+    setLocalFilters(updated);
   }
 
   function handleApply() {
@@ -44,7 +45,14 @@ export default function FilterBar({ filters, themes = [], onFilterChange, onAppl
     onApply();
   }
 
-  function handleClear() {
+  function handleRemoveSingleFilter(key: keyof Filters) {
+    const updated = { ...localFilters, [key]: "" };
+    setLocalFilters(updated);
+    onFilterChange(updated);
+    onApply();
+  }
+
+  function handleClearAll() {
     const empty: Filters = {
       search: "",
       channel: "",
@@ -65,13 +73,39 @@ export default function FilterBar({ filters, themes = [], onFilterChange, onAppl
     }
   }
 
+  function handleDateRangeChange({ startDate, endDate }: { startDate: string; endDate: string }) {
+    const updated = { ...localFilters, dateFrom: startDate, dateTo: endDate };
+    setLocalFilters(updated);
+    onFilterChange(updated);
+    onApply();
+  }
+
+  // Count active filters
+  const activeCount = Object.values(filters).filter((val) => Boolean(val)).length;
+
   return (
-    <div className="bg-white rounded-xl border border-slate-200/80 p-5 shadow-xs space-y-4">
-      <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-        <Filter className="w-4 h-4 text-indigo-600" />
-        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-          Filter & Search Feedback Signals
-        </h3>
+    <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-2xs space-y-4">
+      <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div className="flex items-center gap-2">
+          <Filter className="w-4 h-4 text-indigo-600" />
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+            Search & Triage Customer Feedback
+          </h3>
+          {activeCount > 0 && (
+            <Badge variant="primary" size="sm" className="ml-2 font-bold">
+              {activeCount} Active Filter{activeCount > 1 ? "s" : ""}
+            </Badge>
+          )}
+        </div>
+        {activeCount > 0 && (
+          <button
+            onClick={handleClearAll}
+            className="text-xs text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 transition-colors"
+          >
+            <RotateCcw className="w-3 h-3" />
+            Clear all
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
@@ -83,7 +117,7 @@ export default function FilterBar({ filters, themes = [], onFilterChange, onAppl
             onChange={(e) => handleChange("search", e.target.value)}
             onKeyDown={handleKeyDown}
             leftIcon={<Search className="w-4 h-4 text-slate-400" />}
-            placeholder="Search feedback content..."
+            placeholder="Search feedback text..."
             className="h-9 text-xs"
           />
         </div>
@@ -139,7 +173,7 @@ export default function FilterBar({ filters, themes = [], onFilterChange, onAppl
           </Select>
         </div>
 
-        {/* Action buttons */}
+        {/* Action button */}
         <div className="flex items-center gap-2">
           <Button
             onClick={handleApply}
@@ -149,31 +183,22 @@ export default function FilterBar({ filters, themes = [], onFilterChange, onAppl
           >
             Apply
           </Button>
-          <Button
-            onClick={handleClear}
-            variant="outline"
-            size="sm"
-            className="h-9 px-2.5"
-            title="Clear filters"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-          </Button>
         </div>
       </div>
 
-      {/* Date Range Optional Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-2 border-t border-slate-100/80">
-        <div>
-          <label htmlFor="themeId" className="block text-[11px] font-medium text-slate-500 mb-1">
-            Theme
+      {/* Theme and Date Range Row */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2 border-t border-slate-100/80">
+        <div className="flex items-center gap-2 flex-1 max-w-sm">
+          <label htmlFor="themeId" className="text-xs text-slate-500 font-medium whitespace-nowrap">
+            Theme:
           </label>
           <select
             id="themeId"
             value={localFilters.themeId}
             onChange={(e) => handleChange("themeId", e.target.value)}
-            className="flex h-8 w-full rounded-lg border border-slate-300 bg-white px-3 py-1 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+            className="flex h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
           >
-            <option value="">All themes</option>
+            <option value="">All theme topic clusters</option>
             {themes.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.name}
@@ -182,31 +207,89 @@ export default function FilterBar({ filters, themes = [], onFilterChange, onAppl
           </select>
         </div>
 
-        <div>
-          <label htmlFor="dateFrom" className="block text-[11px] font-medium text-slate-500 mb-1">
-            From Date
-          </label>
-          <input
-            id="dateFrom"
-            type="date"
-            value={localFilters.dateFrom}
-            onChange={(e) => handleChange("dateFrom", e.target.value)}
-            className="flex h-8 w-full rounded-lg border border-slate-300 bg-white px-3 py-1 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-          />
-        </div>
-        <div>
-          <label htmlFor="dateTo" className="block text-[11px] font-medium text-slate-500 mb-1">
-            To Date
-          </label>
-          <input
-            id="dateTo"
-            type="date"
-            value={localFilters.dateTo}
-            onChange={(e) => handleChange("dateTo", e.target.value)}
-            className="flex h-8 w-full rounded-lg border border-slate-300 bg-white px-3 py-1 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-          />
-        </div>
+        <DateRangePicker
+          startDate={localFilters.dateFrom}
+          endDate={localFilters.dateTo}
+          onChange={handleDateRangeChange}
+          onClear={() => handleDateRangeChange({ startDate: "", endDate: "" })}
+        />
       </div>
+
+      {/* Active Filter Chips */}
+      {activeCount > 0 && (
+        <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-slate-100">
+          <span className="text-[11px] font-bold text-slate-400">Active filters:</span>
+          {filters.search && (
+            <Badge variant="neutral" size="sm" className="bg-slate-100 text-slate-800 border-slate-200">
+              Query: &quot;{filters.search}&quot;
+              <X
+                className="w-3 h-3 ml-1 cursor-pointer hover:text-rose-600 shrink-0"
+                onClick={() => handleRemoveSingleFilter("search")}
+              />
+            </Badge>
+          )}
+          {filters.channel && (
+            <Badge variant="neutral" size="sm" className="capitalize bg-slate-100 text-slate-800 border-slate-200">
+              Channel: {filters.channel}
+              <X
+                className="w-3 h-3 ml-1 cursor-pointer hover:text-rose-600 shrink-0"
+                onClick={() => handleRemoveSingleFilter("channel")}
+              />
+            </Badge>
+          )}
+          {filters.sentiment && (
+            <Badge variant="neutral" size="sm" className="bg-slate-100 text-slate-800 border-slate-200">
+              Sentiment: {SENTIMENT_LABELS[filters.sentiment as keyof typeof SENTIMENT_LABELS] || filters.sentiment}
+              <X
+                className="w-3 h-3 ml-1 cursor-pointer hover:text-rose-600 shrink-0"
+                onClick={() => handleRemoveSingleFilter("sentiment")}
+              />
+            </Badge>
+          )}
+          {filters.status && (
+            <Badge variant="neutral" size="sm" className="bg-slate-100 text-slate-800 border-slate-200">
+              Status: {filters.status}
+              <X
+                className="w-3 h-3 ml-1 cursor-pointer hover:text-rose-600 shrink-0"
+                onClick={() => handleRemoveSingleFilter("status")}
+              />
+            </Badge>
+          )}
+          {filters.themeId && (
+            <Badge variant="neutral" size="sm" className="bg-slate-100 text-slate-800 border-slate-200">
+              Theme: {themes.find((t) => t.id === filters.themeId)?.name || filters.themeId}
+              <X
+                className="w-3 h-3 ml-1 cursor-pointer hover:text-rose-600 shrink-0"
+                onClick={() => handleRemoveSingleFilter("themeId")}
+              />
+            </Badge>
+          )}
+          {filters.dateFrom && (
+            <Badge variant="neutral" size="sm" className="bg-slate-100 text-slate-800 border-slate-200">
+              From: {filters.dateFrom}
+              <X
+                className="w-3 h-3 ml-1 cursor-pointer hover:text-rose-600 shrink-0"
+                onClick={() => handleRemoveSingleFilter("dateFrom")}
+              />
+            </Badge>
+          )}
+          {filters.dateTo && (
+            <Badge variant="neutral" size="sm" className="bg-slate-100 text-slate-800 border-slate-200">
+              To: {filters.dateTo}
+              <X
+                className="w-3 h-3 ml-1 cursor-pointer hover:text-rose-600 shrink-0"
+                onClick={() => handleRemoveSingleFilter("dateTo")}
+              />
+            </Badge>
+          )}
+          <button
+            onClick={handleClearAll}
+            className="text-[11px] text-rose-600 hover:text-rose-800 font-bold ml-1 hover:underline"
+          >
+            Clear all
+          </button>
+        </div>
+      )}
     </div>
   );
 }

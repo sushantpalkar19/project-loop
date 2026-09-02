@@ -13,6 +13,8 @@ import { z } from "zod";
 import { requireRole } from "@/lib/permissions";
 import { db } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 // ── Query Validation ──────────────────────────
 
 const analyticsQuerySchema = z.object({
@@ -29,7 +31,7 @@ interface SentimentCount {
 
 interface ThemeCount {
   themeId: string;
-  _count: { themeId: number };
+  count: number;
 }
 
 interface ThemeDetail {
@@ -118,29 +120,118 @@ export async function GET(request: NextRequest) {
       }),
 
       // Top themes — join through FeedbackTheme, scoped to workspace
-      db.feedbackTheme.groupBy({
-        by: ["themeId"],
-        where: {
-          feedback: baseWhere,
-          theme: { workspaceId: user.workspaceId },
-        },
-        _count: { themeId: true },
-        orderBy: { _count: { themeId: "desc" } },
-        take: 10,
-      }),
+      (() => {
+        if (dateFrom && dateTo) {
+          return db.$queryRaw<ThemeCount[]>`
+            SELECT
+              ft."themeId",
+              COUNT(*)::int AS count
+            FROM "FeedbackTheme" ft
+            INNER JOIN "Feedback" f ON f.id = ft."feedbackId"
+            INNER JOIN "Theme" t ON t.id = ft."themeId"
+            WHERE f."workspaceId" = ${user.workspaceId}
+              AND t."workspaceId" = ${user.workspaceId}
+              AND f."createdAt" >= ${dateFrom}
+              AND f."createdAt" <= ${endOfDay(dateTo)}
+            GROUP BY ft."themeId"
+            ORDER BY count DESC
+            LIMIT 10
+          `;
+        } else if (dateFrom) {
+          return db.$queryRaw<ThemeCount[]>`
+            SELECT
+              ft."themeId",
+              COUNT(*)::int AS count
+            FROM "FeedbackTheme" ft
+            INNER JOIN "Feedback" f ON f.id = ft."feedbackId"
+            INNER JOIN "Theme" t ON t.id = ft."themeId"
+            WHERE f."workspaceId" = ${user.workspaceId}
+              AND t."workspaceId" = ${user.workspaceId}
+              AND f."createdAt" >= ${dateFrom}
+            GROUP BY ft."themeId"
+            ORDER BY count DESC
+            LIMIT 10
+          `;
+        } else if (dateTo) {
+          return db.$queryRaw<ThemeCount[]>`
+            SELECT
+              ft."themeId",
+              COUNT(*)::int AS count
+            FROM "FeedbackTheme" ft
+            INNER JOIN "Feedback" f ON f.id = ft."feedbackId"
+            INNER JOIN "Theme" t ON t.id = ft."themeId"
+            WHERE f."workspaceId" = ${user.workspaceId}
+              AND t."workspaceId" = ${user.workspaceId}
+              AND f."createdAt" <= ${endOfDay(dateTo)}
+            GROUP BY ft."themeId"
+            ORDER BY count DESC
+            LIMIT 10
+          `;
+        } else {
+          return db.$queryRaw<ThemeCount[]>`
+            SELECT
+              ft."themeId",
+              COUNT(*)::int AS count
+            FROM "FeedbackTheme" ft
+            INNER JOIN "Feedback" f ON f.id = ft."feedbackId"
+            INNER JOIN "Theme" t ON t.id = ft."themeId"
+            WHERE f."workspaceId" = ${user.workspaceId}
+              AND t."workspaceId" = ${user.workspaceId}
+            GROUP BY ft."themeId"
+            ORDER BY count DESC
+            LIMIT 10
+          `;
+        }
+      })(),
 
       // Volume by date — raw SQL for DATE_TRUNC
-      db.$queryRaw<VolumeRow[]>`
-        SELECT
-          DATE_TRUNC('day', "createdAt")::date AS day,
-          COUNT(*)::int AS count
-        FROM "Feedback"
-        WHERE "workspaceId" = ${user.workspaceId}
-        ${dateFrom ? db.$queryRaw`AND "createdAt" >= ${dateFrom}` : db.$queryRaw``}
-        ${dateTo ? db.$queryRaw`AND "createdAt" <= ${endOfDay(dateTo)}` : db.$queryRaw``}
-        GROUP BY day
-        ORDER BY day ASC
-      `,
+      (() => {
+        if (dateFrom && dateTo) {
+          return db.$queryRaw<VolumeRow[]>`
+            SELECT
+              DATE_TRUNC('day', "createdAt")::date AS day,
+              COUNT(*)::int AS count
+            FROM "Feedback"
+            WHERE "workspaceId" = ${user.workspaceId}
+              AND "createdAt" >= ${dateFrom}
+              AND "createdAt" <= ${endOfDay(dateTo)}
+            GROUP BY day
+            ORDER BY day ASC
+          `;
+        } else if (dateFrom) {
+          return db.$queryRaw<VolumeRow[]>`
+            SELECT
+              DATE_TRUNC('day', "createdAt")::date AS day,
+              COUNT(*)::int AS count
+            FROM "Feedback"
+            WHERE "workspaceId" = ${user.workspaceId}
+              AND "createdAt" >= ${dateFrom}
+            GROUP BY day
+            ORDER BY day ASC
+          `;
+        } else if (dateTo) {
+          return db.$queryRaw<VolumeRow[]>`
+            SELECT
+              DATE_TRUNC('day', "createdAt")::date AS day,
+              COUNT(*)::int AS count
+            FROM "Feedback"
+            WHERE "workspaceId" = ${user.workspaceId}
+              AND "createdAt" <= ${endOfDay(dateTo)}
+            GROUP BY day
+            ORDER BY day ASC
+          `;
+        } else {
+          return db.$queryRaw<VolumeRow[]>`
+            SELECT
+              DATE_TRUNC('day', "createdAt")::date AS day,
+              COUNT(*)::int AS count
+            FROM "Feedback"
+            WHERE "workspaceId" = ${user.workspaceId}
+            GROUP BY day
+            ORDER BY day ASC
+          `;
+        }
+      })(),
     ]);
 
     // 5. Fetch theme details for the top themes
@@ -189,7 +280,7 @@ export async function GET(request: NextRequest) {
         themeId: t.themeId,
         name: detail?.name ?? "Unknown",
         color: detail?.color ?? null,
-        count: t._count.themeId,
+        count: t.count,
       };
     });
 
