@@ -147,7 +147,7 @@ export default function FeedbackDetail({
     >
       <div className="p-6 space-y-5">
         {error && (
-          <div className="rounded-lg bg-rose-50 border border-rose-200 p-3 flex items-center gap-2 text-rose-700 text-xs font-medium">
+          <div className="rounded-xl bg-rose-50 border border-rose-200 p-3 flex items-center gap-2 text-rose-700 text-xs font-medium">
             <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
             <span>{error}</span>
           </div>
@@ -203,7 +203,7 @@ export default function FeedbackDetail({
         </div>
 
         {/* Content Box */}
-        <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-4 space-y-1.5">
+        <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 space-y-1.5">
           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
             Feedback Text
           </span>
@@ -213,7 +213,7 @@ export default function FeedbackDetail({
         </div>
 
         {/* AI Summary Section */}
-        <div className="bg-indigo-50/40 border border-indigo-100/80 rounded-xl p-4 space-y-3">
+        <div className="bg-indigo-50/40 border border-indigo-100/80 rounded-2xl p-4 space-y-3">
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-indigo-500" />
             <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600">
@@ -247,7 +247,7 @@ export default function FeedbackDetail({
         </div>
 
         {/* Metadata Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs bg-white border border-slate-200/60 rounded-xl p-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs bg-white border border-slate-200/60 rounded-2xl p-4">
           <div className="space-y-1">
             <span className="text-slate-500 font-medium block">Source Reference:</span>
             <p className="font-mono text-slate-800 font-semibold">
@@ -295,7 +295,7 @@ export default function FeedbackDetail({
 
         {/* Reclassify with AI — ADMIN/ANALYST only */}
         {canEdit && (
-          <div className="p-4 rounded-xl bg-violet-50/60 border border-violet-100 space-y-2">
+          <div className="p-4 rounded-2xl bg-violet-50/60 border border-violet-100 space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-violet-900 block">
                 AI Classification
@@ -323,7 +323,7 @@ export default function FeedbackDetail({
 
         {/* Status Transition Action */}
         {canEdit && nextStatuses.length > 0 && (
-          <div className="p-4 rounded-xl bg-indigo-50/60 border border-indigo-100 space-y-2">
+          <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-100 space-y-2">
             <span className="text-xs font-semibold text-indigo-900 block">
               Advance Workflow Status
             </span>

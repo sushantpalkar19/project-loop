@@ -10,7 +10,9 @@ import {
   ResponsiveContainer,
   Cell,
 } from "recharts";
+import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Tag } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -82,16 +84,29 @@ export default function ThemesChart({ data, loading }: ThemesChartProps) {
   if (!data || data.length === 0) {
     return (
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2 font-bold">
             <Tag className="w-4 h-4 text-purple-600" />
             Top Themes
           </CardTitle>
           <CardDescription>Themes ranked by feedback volume</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center justify-center h-64 text-xs text-slate-400">
-            No themes associated with feedback yet.
+          <div className="flex flex-col items-center justify-center h-[216px] gap-2.5 text-center px-4">
+            <div className="w-11 h-11 rounded-2xl bg-purple-50 border border-purple-100 flex items-center justify-center">
+              <Tag className="w-5 h-5 text-purple-600" />
+            </div>
+            <div className="space-y-0.5 max-w-[260px]">
+              <p className="text-xs font-bold text-slate-800">No themes discovered yet</p>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                LOOP automatically identifies recurring topics from classified customer feedback.
+              </p>
+            </div>
+            <Link href="/feedback">
+              <Button variant="outline" size="sm" className="h-7 text-xs font-semibold mt-1">
+                View Feedback
+              </Button>
+            </Link>
           </div>
         </CardContent>
       </Card>
@@ -109,15 +124,15 @@ export default function ThemesChart({ data, loading }: ThemesChartProps) {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-base flex items-center gap-2">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2 font-bold">
           <Tag className="w-4 h-4 text-purple-600" />
           Top Themes
         </CardTitle>
         <CardDescription>Themes ranked by feedback volume</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="h-64 w-full">
+        <div className="h-[238px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
               data={chartData}

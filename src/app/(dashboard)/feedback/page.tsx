@@ -294,6 +294,8 @@ export default function FeedbackPage() {
         <Pagination
           currentPage={pagination.page}
           totalPages={pagination.totalPages}
+          totalRecords={pagination.total}
+          pageSize={pagination.pageSize}
           onPageChange={handlePageChange}
         />
       )}

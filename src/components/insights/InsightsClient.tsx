@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import {
   TrendingUp,
   Tag,
@@ -10,6 +11,7 @@ import {
   ArrowRight,
   RefreshCw,
   Sparkles,
+  Inbox,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -110,37 +112,43 @@ export default function InsightsClient() {
   const themes = analytics?.themes ?? [];
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-200">
-      {/* Header Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-2xl p-6 sm:p-8 text-white shadow-xl border border-slate-800">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Badge variant="primary" size="sm" className="bg-indigo-500/20 text-indigo-300 border-indigo-500/30 font-semibold">
-                <Sparkles className="w-3 h-3 mr-1" />
-                AI TOPIC CLUSTERING & SENTIMENT
-              </Badge>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-              Customer Insights & Trends
+    <div className="space-y-6 animate-in fade-in duration-200">
+
+      {/* ── 1. COMPACT HERO BANNER ───────────────────────────────────── */}
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-2xl px-6 py-5 text-white border border-slate-800 shadow-lg">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          {/* Left: badge + title + subtitle */}
+          <div className="space-y-1.5 min-w-0">
+            <Badge
+              variant="primary"
+              size="sm"
+              className="bg-indigo-500/20 text-indigo-300 border-indigo-500/30 font-semibold w-fit"
+            >
+              <Sparkles className="w-3 h-3 mr-1" />
+              AI TOPIC CLUSTERING &amp; SENTIMENT
+            </Badge>
+            <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white leading-tight">
+              Customer Insights &amp; Trends
             </h1>
-            <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
-              Explore discovered customer feedback themes, recurring friction points, feature praise, and sentiment distribution patterns across your workspace.
+            <p className="text-xs text-slate-400 max-w-xl leading-relaxed">
+              Discovered themes, sentiment patterns and recurring friction points across your workspace feedback.
             </p>
           </div>
 
+          {/* Right: refresh action */}
           <Button
             onClick={fetchAnalytics}
             variant="outline"
             size="sm"
-            className="bg-slate-800/80 hover:bg-slate-800 text-white border-slate-700 shrink-0"
+            className="bg-slate-800/80 hover:bg-slate-700 text-white border-slate-700 shrink-0 self-start sm:self-auto"
             leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
           >
-            Refresh Insights
+            Refresh
           </Button>
         </div>
       </div>
 
+      {/* Error state */}
       {error && (
         <ErrorState
           title="Unable to load insights analytics"
@@ -149,8 +157,8 @@ export default function InsightsClient() {
         />
       )}
 
-      {/* Sentiment Overview Section */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      {/* ── 2. KPI SENTIMENT CARDS ───────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {loading ? (
           <>
             <StatCardSkeleton />
@@ -159,67 +167,76 @@ export default function InsightsClient() {
           </>
         ) : (
           <>
-            <Card hoverEffect className="border-emerald-200/80 shadow-2xs">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1.5">
-                    <Smile className="w-4 h-4 text-emerald-600" />
-                    Positive Drivers
-                  </span>
-                  <Badge variant="pos" size="sm" className="font-bold">
+            {/* Positive */}
+            <Card hoverEffect className="border-emerald-200/70">
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center shrink-0">
+                    <Smile className="w-4.5 h-4.5 text-emerald-600" style={{ width: "18px", height: "18px" }} />
+                  </div>
+                  <Badge variant="pos" size="sm" className="font-bold tabular-nums">
                     {sentiment.POS.percentage}%
                   </Badge>
                 </div>
-                <div className="mt-4">
-                  <div className="text-3xl font-extrabold text-slate-900">
+                <div className="mt-3">
+                  <div className="text-2xl font-extrabold text-slate-900 tabular-nums">
                     {sentiment.POS.count}
                   </div>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Positive feedback items praising product & experience
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-700 mt-0.5">
+                    Positive Drivers
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1 leading-snug">
+                    Feedback praising product &amp; experience
                   </p>
                 </div>
               </CardContent>
             </Card>
 
-            <Card hoverEffect className="border-slate-200 shadow-2xs">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                    <Meh className="w-4 h-4 text-slate-500" />
-                    Neutral Signals
-                  </span>
-                  <Badge variant="neu" size="sm" className="font-bold">
+            {/* Neutral */}
+            <Card hoverEffect className="border-slate-200">
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0">
+                    <Meh className="text-slate-500" style={{ width: "18px", height: "18px" }} />
+                  </div>
+                  <Badge variant="neu" size="sm" className="font-bold tabular-nums">
                     {sentiment.NEU.percentage}%
                   </Badge>
                 </div>
-                <div className="mt-4">
-                  <div className="text-3xl font-extrabold text-slate-900">
+                <div className="mt-3">
+                  <div className="text-2xl font-extrabold text-slate-900 tabular-nums">
                     {sentiment.NEU.count}
                   </div>
-                  <p className="text-xs text-slate-500 mt-1">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-600 mt-0.5">
+                    Neutral Signals
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1 leading-snug">
                     Informational or neutral feature inquiries
                   </p>
                 </div>
               </CardContent>
             </Card>
 
-            <Card hoverEffect className="border-rose-200 shadow-2xs">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wider text-rose-700 flex items-center gap-1.5">
-                    <Frown className="w-4 h-4 text-rose-600" />
-                    Customer Pain Points
-                  </span>
-                  <Badge variant="neg" size="sm" className="font-bold">
+            {/* Negative */}
+            <Card hoverEffect className="border-rose-200/70">
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-rose-50 border border-rose-100 flex items-center justify-center shrink-0">
+                    <Frown className="text-rose-600" style={{ width: "18px", height: "18px" }} />
+                  </div>
+                  <Badge variant="neg" size="sm" className="font-bold tabular-nums">
                     {sentiment.NEG.percentage}%
                   </Badge>
                 </div>
-                <div className="mt-4">
-                  <div className="text-3xl font-extrabold text-rose-600">
+                <div className="mt-3">
+                  <div className="text-2xl font-extrabold text-rose-600 tabular-nums">
                     {sentiment.NEG.count}
                   </div>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Negative feedback signals indicating friction or bugs
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-rose-700 mt-0.5">
+                    Customer Pain Points
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1 leading-snug">
+                    Negative signals indicating friction or bugs
                   </p>
                 </div>
               </CardContent>
@@ -228,30 +245,62 @@ export default function InsightsClient() {
         )}
       </div>
 
-      {/* Sentiment & Top Themes Charts Grid */}
+      {/* ── 3. CHARTS ROW ────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <SentimentChart data={sentiment} loading={loading} />
         <ThemesChart data={themes} loading={loading} />
       </div>
 
-      {/* Top Discovered Theme Cards Grid with Drilldown */}
+      {/* ── 4. TOP THEME CLUSTERS GRID ───────────────────────────────── */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2 font-bold">
-            <Tag className="w-4 h-4 text-indigo-600" />
-            Top Discovered Theme Clusters
-          </CardTitle>
-          <CardDescription>
-            Click any theme card to drill down into the underlying customer feedback entries
-          </CardDescription>
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2 font-bold">
+                <Tag className="w-4 h-4 text-indigo-600" />
+                Top Discovered Theme Clusters
+              </CardTitle>
+              <CardDescription className="mt-0.5">
+                Click any theme card to drill down into the underlying customer feedback entries
+              </CardDescription>
+            </div>
+            {themes.length > 0 && (
+              <Badge variant="primary" size="sm" className="font-bold shrink-0">
+                {themes.length} cluster{themes.length !== 1 ? "s" : ""}
+              </Badge>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {loading ? (
-            <Skeleton className="h-48 w-full" />
+            <Skeleton className="h-40 w-full" />
           ) : themes.length === 0 ? (
-            <div className="text-center py-10 text-xs text-slate-500 space-y-2">
-              <p className="font-bold text-slate-700 text-sm">No themes discovered yet</p>
-              <p>Import or submit feedback signals to run AI classification and topic clustering.</p>
+            /* ── Intentionally-designed empty state ── */
+            <div className="flex flex-col items-center justify-center py-10 px-4 text-center space-y-4">
+              <div className="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+                <Inbox className="w-7 h-7 text-indigo-400" />
+              </div>
+              <div className="space-y-1 max-w-sm">
+                <p className="text-sm font-bold text-slate-800">No themes discovered yet</p>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Import or submit customer feedback to run AI classification. Themes are automatically clustered from your workspace data.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 mt-1">
+                <Link href="/feedback">
+                  <Button variant="outline" size="sm">
+                    View Feedback
+                  </Button>
+                </Link>
+                <Button
+                  onClick={fetchAnalytics}
+                  variant="outline"
+                  size="sm"
+                  leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
+                >
+                  Refresh
+                </Button>
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -275,7 +324,7 @@ export default function InsightsClient() {
                       {t.name}
                     </h3>
                     <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">
-                      Customer feedback related to {t.name.toLowerCase()} issues & requests.
+                      Customer feedback related to {t.name.toLowerCase()} issues &amp; requests.
                     </p>
                   </div>
 
@@ -290,7 +339,7 @@ export default function InsightsClient() {
         </CardContent>
       </Card>
 
-      {/* Theme Drill-Down Modal */}
+      {/* ── 5. THEME DRILLDOWN MODAL ─────────────────────────────────── */}
       {selectedTheme && (
         <Dialog
           isOpen={true}

@@ -431,8 +431,21 @@ export default function DashboardPage() {
             {analyticsLoading ? (
               <Skeleton className="h-32 w-full" />
             ) : !analytics?.themes || analytics.themes.length === 0 ? (
-              <div className="text-center py-8 text-xs text-slate-500 font-medium">
-                No active theme clusters yet. Import feedback to run AI topic discovery.
+              <div className="flex flex-col items-center justify-center py-6 px-4 text-center space-y-2">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+                  <Tag className="w-5 h-5 text-indigo-600" />
+                </div>
+                <div className="space-y-0.5 max-w-[280px]">
+                  <p className="text-xs font-bold text-slate-800">Theme insights will appear here</p>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Once enough feedback is classified, LOOP will surface recurring customer topics and supporting signals.
+                  </p>
+                </div>
+                <Link href="/feedback">
+                  <Button variant="outline" size="sm" className="h-7 text-xs font-semibold mt-1">
+                    View Feedback
+                  </Button>
+                </Link>
               </div>
             ) : (
               analytics.themes.slice(0, 4).map((t, idx) => (

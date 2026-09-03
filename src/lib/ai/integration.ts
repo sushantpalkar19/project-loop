@@ -78,26 +78,23 @@ export async function classifyAndPersist(
 
     // Process each theme
     for (const themeResult of classification.themes) {
-      const normalizedName = normalizeThemeName(themeResult.name);
+      const normalizedName = canonicalizeThemeName(themeResult.name);
 
-      // Find existing theme in this workspace
-      let theme = await tx.theme.findUnique({
-        where: {
-          workspaceId_name: {
-            workspaceId,
-            name: normalizedName,
-          },
-        },
+      // Find existing themes in this workspace for case & plural-insensitive matching
+      const existingThemes = await tx.theme.findMany({
+        where: { workspaceId },
       });
+
+      let theme = existingThemes.find(
+        (t) =>
+          canonicalizeThemeName(t.name).toLowerCase() ===
+          normalizedName.toLowerCase()
+      );
 
       // Create theme if it doesn't exist
       if (!theme) {
-        // Determine color: use next available from palette, or fallback
-        const existingThemeCount = await tx.theme.count({
-          where: { workspaceId },
-        });
         const color =
-          THEME_COLORS[existingThemeCount % THEME_COLORS.length];
+          THEME_COLORS[existingThemes.length % THEME_COLORS.length];
 
         theme = await tx.theme.create({
           data: {
@@ -201,25 +198,23 @@ export async function reclassifyAndPersist(
 
     // Process each new theme
     for (const themeResult of classification.themes) {
-      const normalizedName = normalizeThemeName(themeResult.name);
+      const normalizedName = canonicalizeThemeName(themeResult.name);
 
-      // Find existing theme in this workspace
-      let theme = await tx.theme.findUnique({
-        where: {
-          workspaceId_name: {
-            workspaceId,
-            name: normalizedName,
-          },
-        },
+      // Find existing themes in this workspace for case & plural-insensitive matching
+      const existingThemes = await tx.theme.findMany({
+        where: { workspaceId },
       });
+
+      let theme = existingThemes.find(
+        (t) =>
+          canonicalizeThemeName(t.name).toLowerCase() ===
+          normalizedName.toLowerCase()
+      );
 
       // Create theme if it doesn't exist
       if (!theme) {
-        const existingThemeCount = await tx.theme.count({
-          where: { workspaceId },
-        });
         const color =
-          THEME_COLORS[existingThemeCount % THEME_COLORS.length];
+          THEME_COLORS[existingThemes.length % THEME_COLORS.length];
 
         theme = await tx.theme.create({
           data: {
@@ -424,26 +419,61 @@ export async function embedBatch(
 // ── Helpers ───────────────────────────────────
 
 /**
- * Normalize a theme name for consistent lookup.
- * Trims whitespace, collapses multiple spaces, title-cases.
- *
- * Examples:
- *   " customer support " → "Customer Support"
- *   "PRICING" → "Pricing"
- *   "  ui/ux  " → "Ui/Ux"
+ * Canonicalize a theme name for consistent lookup and concept grouping.
+ * Trims whitespace, standardizes casing, applies category mappings, and pluralizes.
  */
-function normalizeThemeName(name: string): string {
-  return name
-    .trim()
-    .replace(/\s+/g, " ")
-    .split(" ")
-    .map((word) => {
-      // Preserve all-caps words (like "UI/UX", "API") as-is
-      if (word === word.toUpperCase() && word.length > 1) {
-        return word;
-      }
-      // Title case: first letter uppercase, rest lowercase
-      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-    })
-    .join(" ");
+export function canonicalizeThemeName(name: string): string {
+  let cleaned = name.trim().replace(/\s+/g, " ");
+
+  const words = cleaned.split(" ").map((word) => {
+    if (word === word.toUpperCase() && word.length >= 2) return word;
+    if (word.toLowerCase() === "ui/ux") return "UI/UX";
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  });
+
+  cleaned = words.join(" ");
+
+  const lower = cleaned.toLowerCase();
+
+  if (lower === "integration" || lower === "third-party integration" || lower === "integrations") {
+    return "Integrations";
+  }
+  if (lower === "notification" || lower === "notifications" || lower === "push notification") {
+    return "Notifications";
+  }
+  if (lower === "ui" || lower === "ui issue" || lower === "ux" || lower === "ui/ux" || lower === "ui/ux issue" || lower === "user interface") {
+    return "UI/UX";
+  }
+  if (lower === "performance" || lower === "performance issue" || lower === "performance problems" || lower === "slow performance") {
+    return "Performance";
+  }
+  if (lower === "onboarding" || lower === "onboarding tutorial" || lower === "user onboarding") {
+    return "Onboarding";
+  }
+  if (lower === "pricing" || lower === "billing" || lower === "pricing & billing") {
+    return "Pricing";
+  }
+  if (lower === "support" || lower === "customer support" || lower === "support experience") {
+    return "Customer Support";
+  }
+  if (lower === "feature request" || lower === "feature requests" || lower === "new feature") {
+    return "Feature Requests";
+  }
+  if (lower === "reliability" || lower === "reliabilitys" || lower === "system reliability") {
+    return "Reliability";
+  }
+  if (lower === "security" || lower === "securitys" || lower === "data security") {
+    return "Security";
+  }
+
+  const abstractQualities = ["reliability", "security", "usability", "pricing", "performance", "onboarding", "documentation", "support"];
+  if (abstractQualities.includes(lower)) {
+    return cleaned;
+  }
+
+  if (words.length === 1 && !cleaned.endsWith("s") && !cleaned.endsWith("y") && !cleaned.includes("/")) {
+    cleaned += "s";
+  }
+
+  return cleaned;
 }

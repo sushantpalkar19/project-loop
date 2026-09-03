@@ -174,7 +174,7 @@ export default function FeedbackList({
           <div
             key={item.id}
             onClick={() => onSelect(item)}
-            className="bg-white rounded-xl border border-slate-200 p-4 space-y-3 shadow-xs active:bg-slate-50 cursor-pointer"
+            className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3 shadow-xs active:scale-[0.99] hover:border-slate-300 hover:shadow-sm cursor-pointer transition-all duration-150"
           >
             <div className="flex items-center justify-between gap-2">
               <Badge variant="neutral" size="sm" className="font-mono uppercase">
@@ -213,13 +213,20 @@ export default function FeedbackList({
               {item.content}
             </p>
 
+            {item.shortSummary && (
+              <p className="text-[11px] text-slate-500 line-clamp-1 bg-slate-50 border border-slate-200/60 rounded-lg px-2 py-0.5">
+                <span className="font-bold text-indigo-600 mr-1">AI:</span>
+                {item.shortSummary}
+              </p>
+            )}
+
             <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-[11px] text-slate-500">
               <span className="flex items-center gap-1">
                 <Calendar className="w-3 h-3 text-slate-400" />
                 {new Date(item.createdAt).toLocaleDateString()}
               </span>
               {item.customerLabel && (
-                <span className="font-mono text-purple-600">
+                <span className="font-mono text-purple-600 font-semibold">
                   {item.customerLabel}
                 </span>
               )}

@@ -117,14 +117,14 @@ export default function SentimentChart({ data, loading }: SentimentChartProps) {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-base flex items-center gap-2">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2 font-bold">
           <PieChart className="w-4 h-4 text-indigo-600" />
           Sentiment Breakdown
         </CardTitle>
         <CardDescription>Distribution of customer sentiment</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-3">
         {/* Legend */}
         <div className="flex items-center justify-center gap-4 text-xs">
           {chartData.map((item) => (
@@ -134,7 +134,7 @@ export default function SentimentChart({ data, loading }: SentimentChartProps) {
                 style={{ backgroundColor: item.fill }}
               />
               <span className="text-slate-600 font-medium">{item.name}</span>
-              <span className="text-slate-400">
+              <span className="text-slate-400 font-mono text-[11px]">
                 ({item.count})
               </span>
             </div>
@@ -142,7 +142,7 @@ export default function SentimentChart({ data, loading }: SentimentChartProps) {
         </div>
 
         {/* Bar Chart */}
-        <div className="h-52 w-full">
+        <div className="h-[216px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
               data={chartData}
@@ -151,18 +151,18 @@ export default function SentimentChart({ data, loading }: SentimentChartProps) {
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
               <XAxis
                 dataKey="name"
-                tick={{ fontSize: 11, fill: "#94a3b8" }}
+                tick={{ fontSize: 11, fill: "#64748b" }}
                 tickLine={false}
                 axisLine={{ stroke: "#e2e8f0" }}
               />
               <YAxis
-                tick={{ fontSize: 11, fill: "#94a3b8" }}
+                tick={{ fontSize: 11, fill: "#64748b" }}
                 tickLine={false}
                 axisLine={false}
                 allowDecimals={false}
               />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="count" radius={[6, 6, 0, 0]} maxBarSize={60}>
+              <Bar dataKey="count" radius={[6, 6, 0, 0]} maxBarSize={56}>
                 {chartData.map((entry) => (
                   <Cell key={entry.key} fill={entry.fill} />
                 ))}

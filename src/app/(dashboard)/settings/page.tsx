@@ -134,16 +134,16 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent className="space-y-3 text-xs">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="p-3 bg-slate-50 border rounded-lg">
-              <span className="text-slate-500 block font-medium">Framework</span>
+            <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl">
+              <span className="text-slate-500 block font-medium mb-0.5">Framework</span>
               <span className="font-bold text-slate-900">Next.js 14 App Router</span>
             </div>
-            <div className="p-3 bg-slate-50 border rounded-lg">
-              <span className="text-slate-500 block font-medium">Database & ORM</span>
+            <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl">
+              <span className="text-slate-500 block font-medium mb-0.5">Database & ORM</span>
               <span className="font-bold text-slate-900">PostgreSQL + Prisma ORM</span>
             </div>
-            <div className="p-3 bg-slate-50 border rounded-lg">
-              <span className="text-slate-500 block font-medium">AI Intelligence</span>
+            <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl">
+              <span className="text-slate-500 block font-medium mb-0.5">AI Intelligence</span>
               <span className="font-bold text-slate-900">Google Gemini / Vector Search</span>
             </div>
           </div>

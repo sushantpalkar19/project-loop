@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { signOut, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import {
   LayoutDashboard,
   MessageSquare,
@@ -17,9 +17,11 @@ import {
   Layers,
   Shield,
   ChevronRight,
+  Loader2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { useLogout } from "@/components/layout/LogoutContext";
 
 interface SidebarProps {
   mobileOpen?: boolean;
@@ -29,6 +31,7 @@ interface SidebarProps {
 export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
   const { data: session } = useSession();
+  const { isLoggingOut, handleLogout } = useLogout();
 
   const user = session?.user;
   const isAdmin = user?.role === "ADMIN";
@@ -125,21 +128,19 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
         )}
       </div>
 
-      {/* Active Workspace Indicator Card */}
+      {/* Active Workspace Indicator */}
       {user?.workspaceId && (
-        <div className="px-3 pt-4 pb-2 shrink-0">
-          <div className="px-3 py-2.5 rounded-xl bg-slate-900/90 border border-slate-800/90 flex items-center justify-between shadow-2xs">
-            <div className="truncate min-w-0 pr-2">
-              <span className="text-[9px] uppercase font-bold text-slate-400 block tracking-widest">
+        <div className="px-3 pt-3 pb-2 shrink-0">
+          <div className="px-3 py-2 rounded-xl bg-slate-900/80 border border-slate-800/60 flex items-center justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <span className="text-[9px] uppercase font-bold text-slate-500 block tracking-widest">
                 Tenant Workspace
               </span>
-              <span className="text-xs font-mono font-bold text-white truncate block">
-                {user.workspaceId.slice(0, 10)}...
+              <span className="text-[11px] font-mono font-bold text-slate-300 truncate block">
+                {user.workspaceId.slice(0, 14)}…
               </span>
             </div>
-            <Badge variant="primary" size="sm" className="bg-indigo-500/20 text-indigo-300 border-indigo-500/30 font-semibold shrink-0">
-              Isolated
-            </Badge>
+            <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 shadow-sm shadow-emerald-500/50" title="Active" />
           </div>
         </div>
       )}
@@ -222,20 +223,20 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
 
       {/* User Footer Profile Card */}
       {user && (
-        <div className="p-4 border-t border-slate-800/80 bg-slate-900/80 shrink-0">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-9 h-9 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-md shrink-0">
+        <div className="p-3 border-t border-slate-800/80 bg-slate-900/60 shrink-0">
+          <div className="flex items-center gap-2.5 mb-2.5">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-indigo-700 text-white flex items-center justify-center font-bold text-sm shadow-md shrink-0 ring-2 ring-slate-800">
               {(user.name || user.email || "U").charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold text-white truncate">
+              <p className="text-xs font-bold text-white truncate leading-tight">
                 {user.name || "Authenticated User"}
               </p>
-              <p className="text-[11px] text-slate-400 truncate font-mono">{user.email}</p>
+              <p className="text-[10px] text-slate-500 truncate font-mono leading-tight mt-0.5">{user.email}</p>
             </div>
           </div>
 
-          <div className="flex items-center justify-between pt-2 border-t border-slate-800/60">
+          <div className="flex items-center justify-between">
             <Badge
               variant={
                 user.role === "ADMIN"
@@ -251,12 +252,23 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
             </Badge>
 
             <button
-              onClick={() => signOut({ callbackUrl: "/login" })}
-              className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-rose-400 transition-colors px-2 py-1 rounded-lg hover:bg-slate-800 font-semibold"
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-rose-400 focus:text-rose-400 transition-colors px-2 py-1 rounded-lg hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 font-semibold disabled:opacity-60 disabled:cursor-not-allowed select-none"
               title="Sign out of workspace"
+              aria-busy={isLoggingOut}
             >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>Logout</span>
+              {isLoggingOut ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
+                  <span>Signing out…</span>
+                </>
+              ) : (
+                <>
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Log out</span>
+                </>
+              )}
             </button>
           </div>
         </div>
