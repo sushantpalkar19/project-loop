@@ -11,7 +11,7 @@ import { authOptions } from "@/lib/auth";
 
 // ── Types ─────────────────────────────────────
 
-export type Role = "ADMIN" | "ANALYST" | "VIEWER";
+export type Role = "ADMIN" | "MANAGER" | "ANALYST" | "VIEWER";
 
 export interface AuthenticatedUser {
   id: string;

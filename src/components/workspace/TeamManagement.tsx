@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
-import { Users, Shield, RefreshCw } from "lucide-react";
+import { Users, Shield, RefreshCw, UserPlus, Trash2, X } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ interface Member {
   id: string;
   name: string | null;
   email: string;
-  role: "ADMIN" | "ANALYST" | "VIEWER";
+  role: "ADMIN" | "MANAGER" | "ANALYST" | "VIEWER";
   createdAt: string;
 }
 
@@ -23,12 +23,17 @@ export default function TeamManagement() {
   const { data: session } = useSession();
   const user = session?.user;
   const isAdmin = user?.role === "ADMIN";
+  const isManager = user?.role === "MANAGER";
+  const canManage = isAdmin || isManager;
   const { success, error: toastError, info } = useToast();
 
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addingMember, setAddingMember] = useState(false);
+  const [newMember, setNewMember] = useState({ name: "", email: "", password: "", role: "VIEWER" as "MANAGER" | "ANALYST" | "VIEWER" });
 
   const fetchMembers = useCallback(async () => {
     try {
@@ -53,10 +58,10 @@ export default function TeamManagement() {
   }, [toastError]);
 
   useEffect(() => {
-    if (isAdmin) {
+    if (canManage) {
       fetchMembers();
     }
-  }, [isAdmin, fetchMembers]);
+  }, [canManage, fetchMembers]);
 
   const handleRoleChange = async (memberId: string, memberEmail: string, newRole: string) => {
     setUpdatingId(memberId);
@@ -87,15 +92,77 @@ export default function TeamManagement() {
     }
   };
 
-  if (!isAdmin) {
+  const handleAddMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAddingMember(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/workspace/members", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newMember),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to add member");
+      }
+
+      success(`Member ${newMember.email} added successfully.`, "Member Added");
+      setNewMember({ name: "", email: "", password: "", role: "VIEWER" });
+      setShowAddForm(false);
+      fetchMembers();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to add member";
+      setError(msg);
+      toastError(msg, "Add Member Error");
+    } finally {
+      setAddingMember(false);
+    }
+  };
+
+  const handleRemoveMember = async (memberId: string, memberEmail: string) => {
+    if (!confirm(`Are you sure you want to remove ${memberEmail} from the workspace?`)) {
+      return;
+    }
+
+    setUpdatingId(memberId);
+    setError(null);
+    info(`Removing ${memberEmail}...`, "Removing Member");
+
+    try {
+      const res = await fetch(`/api/workspace/members/${memberId}`, {
+        method: "DELETE",
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to remove member");
+      }
+
+      success(`Member ${memberEmail} removed successfully.`, "Member Removed");
+      fetchMembers();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to remove member";
+      setError(msg);
+      toastError(msg, "Remove Member Error");
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  if (!canManage) {
     return (
       <div className="max-w-2xl mx-auto py-12 text-center space-y-4">
         <div className="w-14 h-14 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto shadow-2xs border border-rose-200">
           <Shield className="w-7 h-7" />
         </div>
-        <h2 className="text-xl font-extrabold text-slate-900">Admin Access Required</h2>
+        <h2 className="text-xl font-extrabold text-slate-900">Admin or Manager Access Required</h2>
         <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
-          Only Admin users have permission to manage workspace team members and assign roles.
+          Only Admin or Manager users have permission to view workspace team members.
         </p>
       </div>
     );
@@ -121,15 +188,28 @@ export default function TeamManagement() {
             </p>
           </div>
 
-          <Button
-            onClick={fetchMembers}
-            variant="outline"
-            size="sm"
-            className="bg-slate-800 hover:bg-slate-700 text-white border-slate-700 shrink-0"
-            leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
-          >
-            Refresh Members
-          </Button>
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <Button
+                onClick={() => setShowAddForm(!showAddForm)}
+                variant="primary"
+                size="sm"
+                className="shrink-0"
+                leftIcon={<UserPlus className="w-3.5 h-3.5" />}
+              >
+                {showAddForm ? "Cancel" : "Add Member"}
+              </Button>
+            )}
+            <Button
+              onClick={fetchMembers}
+              variant="outline"
+              size="sm"
+              className="bg-slate-800 hover:bg-slate-700 text-white border-slate-700 shrink-0"
+              leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
+            >
+              Refresh
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -141,8 +221,99 @@ export default function TeamManagement() {
         />
       )}
 
+      {/* Add Member Form */}
+      {showAddForm && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <UserPlus className="w-4 h-4 text-indigo-600" />
+              Add New Team Member
+            </CardTitle>
+            <CardDescription>Create a new member account in your workspace</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleAddMember} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-700 block">Full Name</label>
+                  <input
+                    type="text"
+                    value={newMember.name}
+                    onChange={(e) => setNewMember({ ...newMember, name: e.target.value })}
+                    placeholder="John Doe"
+                    className="w-full h-9 rounded-lg border border-slate-300 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-700 block">Email Address</label>
+                  <input
+                    type="email"
+                    value={newMember.email}
+                    onChange={(e) => setNewMember({ ...newMember, email: e.target.value })}
+                    placeholder="john@example.com"
+                    className="w-full h-9 rounded-lg border border-slate-300 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    required
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-700 block">Password</label>
+                  <input
+                    type="password"
+                    value={newMember.password}
+                    onChange={(e) => setNewMember({ ...newMember, password: e.target.value })}
+                    placeholder="Min 8 characters"
+                    className="w-full h-9 rounded-lg border border-slate-300 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    required
+                    minLength={8}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-700 block">Role</label>
+                  <select
+                    value={newMember.role}
+                    onChange={(e) => setNewMember({ ...newMember, role: e.target.value as "MANAGER" | "ANALYST" | "VIEWER" })}
+                    className="w-full h-9 rounded-lg border border-slate-300 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  >
+                    <option value="VIEWER">VIEWER (Read Only)</option>
+                    <option value="ANALYST">ANALYST (Feedback Controls)</option>
+                    <option value="MANAGER">MANAGER (Team Management)</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 pt-2">
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="sm"
+                  isLoading={addingMember}
+                  className="shrink-0"
+                >
+                  Add Member
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setShowAddForm(false);
+                    setNewMember({ name: "", email: "", password: "", role: "VIEWER" });
+                  }}
+                  leftIcon={<X className="w-3.5 h-3.5" />}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
+
       {/* Role Explanations Card */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="border-purple-200/80 bg-purple-50/30 shadow-2xs">
           <CardContent className="p-4 space-y-1.5">
             <div className="flex items-center justify-between">
@@ -151,6 +322,18 @@ export default function TeamManagement() {
             </div>
             <p className="text-xs text-slate-700 leading-relaxed">
               Manage workspace members, assign roles, access settings, feedback ingestion, Ask LOOP, & VoC reports.
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-amber-200/80 bg-amber-50/30 shadow-2xs">
+          <CardContent className="p-4 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Badge variant="info" size="sm" className="font-bold">MANAGER</Badge>
+              <span className="text-[10px] text-amber-700 font-bold">Team Mgmt</span>
+            </div>
+            <p className="text-xs text-slate-700 leading-relaxed">
+              Manage team members, assign roles, access feedback, Ask LOOP & VoC reports. Cannot modify workspace settings.
             </p>
           </CardContent>
         </Card>
@@ -235,6 +418,8 @@ export default function TeamManagement() {
                         variant={
                           member.role === "ADMIN"
                             ? "purple"
+                            : member.role === "MANAGER"
+                            ? "info"
                             : member.role === "ANALYST"
                             ? "info"
                             : "neutral"
@@ -252,16 +437,29 @@ export default function TeamManagement() {
                       {member.id === user?.id ? (
                         <span className="text-xs text-slate-400 italic">Self (Admin)</span>
                       ) : (
-                        <select
-                          value={member.role}
-                          disabled={updatingId === member.id}
-                          onChange={(e) => handleRoleChange(member.id, member.email, e.target.value)}
-                          className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
-                        >
-                          <option value="ADMIN">ADMIN</option>
-                          <option value="ANALYST">ANALYST</option>
-                          <option value="VIEWER">VIEWER</option>
-                        </select>
+                        <div className="flex items-center justify-end gap-2">
+                          <select
+                            value={member.role}
+                            disabled={updatingId === member.id}
+                            onChange={(e) => handleRoleChange(member.id, member.email, e.target.value)}
+                            className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
+                          >
+                            <option value="ADMIN">ADMIN</option>
+                            <option value="MANAGER">MANAGER</option>
+                            <option value="ANALYST">ANALYST</option>
+                            <option value="VIEWER">VIEWER</option>
+                          </select>
+                          {member.role !== "ADMIN" && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRemoveMember(member.id, member.email)}
+                              isLoading={updatingId === member.id}
+                              className="h-8 w-8 p-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                              leftIcon={<Trash2 className="w-3.5 h-3.5" />}
+                            />
+                          )}
+                        </div>
                       )}
                     </TableCell>
                   </TableRow>

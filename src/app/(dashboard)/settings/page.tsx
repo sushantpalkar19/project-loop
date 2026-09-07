@@ -63,6 +63,8 @@ export default function SettingsPage() {
                 variant={
                   user?.role === "ADMIN"
                     ? "purple"
+                    : user?.role === "MANAGER"
+                    ? "info"
                     : user?.role === "ANALYST"
                     ? "info"
                     : "neutral"

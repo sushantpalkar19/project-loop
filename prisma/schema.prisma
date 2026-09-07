@@ -16,6 +16,7 @@ datasource db {
 
 enum Role {
   ADMIN
+  MANAGER
   ANALYST
   VIEWER
 }
