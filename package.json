@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
+    "postinstall": "prisma generate",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
@@ -13,7 +14,14 @@
     "db:generate": "prisma generate",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
-    "db:reset": "prisma migrate reset"
+    "db:reset": "prisma migrate reset",
+    "test": "playwright test",
+    "test:api": "playwright test tests/api-security.spec.ts",
+    "test:ui": "playwright test tests/ui-ux.spec.ts",
+    "test:auth": "playwright test tests/auth-rbac.spec.ts",
+    "test:reports": "playwright test tests/reports.spec.ts",
+    "test:milestone": "playwright test tests/milestone-integration.spec.ts",
+    "test:report": "playwright show-report"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
@@ -41,12 +49,14 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20.17.57",
     "@types/pg": "^8.23.1",
     "@types/react": "^18.3.23",
     "@types/react-dom": "^18.3.7",
     "autoprefixer": "^10.4.21",
+    "browserstack-node-sdk": "^1.70.1",
     "eslint": "^8.57.1",
     "eslint-config-next": "14.2.29",
     "postcss": "^8.5.6",
