@@ -17,3 +17,6 @@ CREATE INDEX "Log_workspaceId_createdAt_idx" ON "Log"("workspaceId", "createdAt"
 
 -- CreateIndex
 CREATE INDEX "Log_workspaceId_action_idx" ON "Log"("workspaceId", "action");
+
+-- AddForeignKey
+ALTER TABLE "Log" ADD CONSTRAINT "Log_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;

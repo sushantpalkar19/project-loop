@@ -53,6 +53,7 @@ model Workspace {
   users     User[]
   feedbacks Feedback[]
   themes    Theme[]
+  logs      Log[]
   reports   Report[]
 
   @@index([name])
@@ -161,6 +162,27 @@ model Embedding {
 
   // Relations
   feedback Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+}
+
+// ── Log ───────────────────────────────────────
+// Admin-only activity/audit log. Scoped to workspace.
+
+model Log {
+  id          String   @id @default(cuid())
+  workspaceId String
+  action      String   // e.g. "member.created", "feedback.created"
+  message     String
+  userId      String? // who triggered the action, when applicable
+  userName    String? // denormalized display name
+  metadata    Json?   // optional structured details
+  createdAt   DateTime @default(now())
+
+  // Relations
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([workspaceId, createdAt(sort: Desc)])
+  @@index([workspaceId, action])
 }
 
 // ── Report ────────────────────────────────────
