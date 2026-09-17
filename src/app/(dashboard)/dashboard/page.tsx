@@ -70,6 +70,7 @@ export default function DashboardPage() {
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [greeting, setGreeting] = useState("Welcome");
 
   const loadAnalytics = useCallback(
     async (from?: string, to?: string) => {
@@ -119,6 +120,17 @@ export default function DashboardPage() {
     loadAnalytics();
   }, [loadDashboardData, loadAnalytics]);
 
+  useEffect(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) {
+      setGreeting("Good morning");
+    } else if (hour < 18) {
+      setGreeting("Good afternoon");
+    } else {
+      setGreeting("Good evening");
+    }
+  }, []);
+
   // Derive analytics fields safely
   const totalFeedback = analytics?.metrics?.totalFeedback ?? 0;
   const negativePercentage = analytics?.metrics?.negativePercentage ?? 0;
@@ -146,13 +158,6 @@ export default function DashboardPage() {
     success("Cleared date filter. Showing all-time metrics.", "Analytics Reset");
   }
 
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return "Good morning";
-    if (hour < 18) return "Good afternoon";
-    return "Good evening";
-  };
-
   return (
     <div className="space-y-8 animate-in fade-in duration-200">
       {/* 1. Personalized Header Greeting Banner */}
@@ -171,7 +176,7 @@ export default function DashboardPage() {
               </span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-              {getGreeting()}, {user?.name || user?.email?.split("@")[0] || "Team Member"} 👋
+              {greeting}, {user?.name || user?.email?.split("@")[0] || "Team Member"} 👋
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 max-w-xl leading-relaxed">
               Here&apos;s what your customers are saying. Review sentiment trends, high-priority feedback, and key customer topics.

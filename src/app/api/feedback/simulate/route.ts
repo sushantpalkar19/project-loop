@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/permissions";
 import { db } from "@/lib/db";
 import { FEEDBACK_CHANNELS } from "@/lib/constants";
+import { createLog } from "@/lib/logs";
 
 // ── Realistic Feedback Templates ──────────────
 
@@ -162,7 +163,17 @@ export async function POST(_request: NextRequest) {
     // 4. Bulk insert
     const result = await db.feedback.createMany({ data });
 
-    // 5. Return success
+    // 5. Log the simulation
+    createLog({
+      workspaceId: user.workspaceId,
+      action: "feedback.simulated",
+      message: `Simulated ${result.count} feedback records from multiple channels`,
+      userId: user.id,
+      userName: user.name || user.email,
+      metadata: { count: result.count },
+    });
+
+    // 6. Return success
     return NextResponse.json({
       message: `Simulated ${result.count} feedback records from multiple channels`,
       count: result.count,

@@ -17,6 +17,7 @@ import { z } from "zod";
 import { hash } from "bcryptjs";
 import { requireRole } from "@/lib/permissions";
 import { db } from "@/lib/db";
+import { createLog } from "@/lib/logs";
 
 export const dynamic = "force-dynamic";
 
@@ -116,6 +117,16 @@ export async function POST(request: Request) {
         role: true,
         createdAt: true,
       },
+    });
+
+    // 6. Log the action
+    createLog({
+      workspaceId: admin.workspaceId,
+      action: "member.created",
+      message: `Added member ${name} (${email}) with role ${role}`,
+      userId: admin.id,
+      userName: admin.name || admin.email,
+      metadata: { newUserId: user.id, email, role },
     });
 
     return NextResponse.json({ user }, { status: 201 });

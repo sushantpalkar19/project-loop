@@ -100,6 +100,16 @@ export function parseGeminiError(error: unknown, operation: string): ParsedGemin
     };
   }
 
+  if (status === 503) {
+    return {
+      kind: "api_error",
+      httpStatus: 503,
+      userMessage:
+        "Gemini AI service is temporarily unavailable. Please try again in a few moments.",
+      logMessage,
+    };
+  }
+
   if (status === 400) {
     return {
       kind: "invalid_request",

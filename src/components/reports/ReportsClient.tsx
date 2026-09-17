@@ -116,6 +116,8 @@ export default function ReportsClient() {
   const [loadingReports, setLoadingReports] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
+  const [isRetryable, setIsRetryable] = useState(false);
 
   const loadReports = useCallback(async () => {
     setLoadingReports(true);
@@ -181,7 +183,11 @@ export default function ReportsClient() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to generate report");
+        setError(data.error || "Failed to generate report");
+        setErrorCode(data.code || null);
+        setIsRetryable(data.retryable || false);
+        toastError(data.error || "Failed to generate report", "Generation Error");
+        return;
       }
 
       const report = data.report as ReportRecord;
@@ -190,10 +196,15 @@ export default function ReportsClient() {
         report,
         ...current.filter((item) => item.id !== report.id),
       ]);
+      setError(null);
+      setErrorCode(null);
+      setIsRetryable(false);
       success("Voice-of-Customer report generated successfully.", "Report Ready");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to generate report";
       setError(msg);
+      setErrorCode("NETWORK_ERROR");
+      setIsRetryable(true);
       toastError(msg, "Generation Error");
     } finally {
       setGenerating(false);
@@ -281,9 +292,9 @@ export default function ReportsClient() {
 
       {error && (
         <ErrorState
-          title="Unable to load reports"
+          title="Report Generation Failed"
           message={error}
-          onRetry={loadReports}
+          onRetry={isRetryable ? handleGenerate : undefined}
         />
       )}
 

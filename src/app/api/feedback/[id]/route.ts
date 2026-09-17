@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/permissions";
 import { db } from "@/lib/db";
 import { updateFeedbackSchema } from "@/lib/validations/feedback";
+import { createLog } from "@/lib/logs";
 
 // ── GET: Retrieve Single Feedback ─────────────
 
@@ -196,6 +197,16 @@ export async function DELETE(
     // 3. Delete feedback (cascades to FeedbackTheme and Embedding)
     await db.feedback.delete({
       where: { id: params.id },
+    });
+
+    // 4. Log the deletion
+    createLog({
+      workspaceId: user.workspaceId,
+      action: "feedback.deleted",
+      message: `Deleted feedback ${params.id}`,
+      userId: user.id,
+      userName: user.name || user.email,
+      metadata: { feedbackId: params.id },
     });
 
     return NextResponse.json({ message: "Feedback deleted" });

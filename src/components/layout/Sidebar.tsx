@@ -18,6 +18,7 @@ import {
   Shield,
   ChevronRight,
   Loader2,
+  ScrollText,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -87,6 +88,13 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
       href: "/settings",
       icon: Settings,
       active: pathname.startsWith("/settings"),
+      roles: ["ADMIN"],
+    },
+    {
+      label: "Activity Logs",
+      href: "/logs",
+      icon: ScrollText,
+      active: pathname.startsWith("/logs"),
       roles: ["ADMIN"],
     },
   ];

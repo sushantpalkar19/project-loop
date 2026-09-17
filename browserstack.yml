@@ -1,0 +1,18 @@
+userName: ${BROWSERSTACK_USERNAME}
+accessKey: ${BROWSERSTACK_ACCESS_KEY}
+
+browsers:
+  - browser: chrome
+    browser_version: latest
+    os: Windows
+    os_version: 11
+
+parallelsPerPlatform: 1
+browserstackLocal: false
+
+buildName: "Project LOOP - Production QA"
+projectName: "Project LOOP"
+testObservability: true
+debug: false
+networkLogs: false
+consoleLogs: errors

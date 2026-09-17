@@ -16,6 +16,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/permissions";
 import { db } from "@/lib/db";
+import { createLog } from "@/lib/logs";
 
 // ── Validation ────────────────────────────────
 
@@ -88,6 +89,16 @@ export async function PATCH(
       },
     });
 
+    // 6. Log the role change
+    createLog({
+      workspaceId: admin.workspaceId,
+      action: "member.role_changed",
+      message: `Changed ${targetUser.email} role from ${targetUser.role} to ${role}`,
+      userId: admin.id,
+      userName: admin.name || admin.email,
+      metadata: { targetUserId: targetUser.id, email: targetUser.email, fromRole: targetUser.role, toRole: role },
+    });
+
     return NextResponse.json({ user: updatedUser });
   } catch (error) {
     if (error instanceof Error && error.name === "AuthError") {
@@ -156,6 +167,16 @@ export async function DELETE(
     // 5. Delete the user (cascade will handle related records)
     await db.user.delete({
       where: { id: targetUserId },
+    });
+
+    // 6. Log the removal
+    createLog({
+      workspaceId: admin.workspaceId,
+      action: "member.removed",
+      message: `Removed member ${targetUser.email} (${targetUser.role}) from workspace`,
+      userId: admin.id,
+      userName: admin.name || admin.email,
+      metadata: { removedUserId: targetUserId, email: targetUser.email, role: targetUser.role },
     });
 
     return NextResponse.json({ message: "Member removed successfully" });

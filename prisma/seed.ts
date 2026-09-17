@@ -14,14 +14,14 @@
 import { PrismaClient } from "../src/generated/prisma/client";
 import { Role, Sentiment, FeedbackStatus } from "../src/generated/prisma/enums";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { createHash } from "crypto";
+import { hashSync } from "bcryptjs";
 import { FEEDBACK_CHANNELS } from "../src/lib/constants";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
 
 function hashPassword(password: string): string {
-  return createHash("sha256").update(password).digest("hex");
+  return hashSync(password, 12);
 }
 
 // ── Helper: random element from array ─────────

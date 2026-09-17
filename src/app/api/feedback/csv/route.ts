@@ -17,6 +17,7 @@ import { requireRole } from "@/lib/permissions";
 import { db } from "@/lib/db";
 import { FEEDBACK_CHANNELS } from "@/lib/constants";
 import { classifyBatch } from "@/lib/ai/integration";
+import { createLog } from "@/lib/logs";
 
 // ── Constants ─────────────────────────────────
 
@@ -299,9 +300,19 @@ export async function POST(request: NextRequest) {
       if (insertedRecords.length > 0) {
         classifyBatch(insertedRecords, user.workspaceId);
       }
+
+      // 10. Log the CSV import
+      createLog({
+        workspaceId: user.workspaceId,
+        action: "feedback.csv_import",
+        message: `Imported ${result.successCount} feedback records from CSV`,
+        userId: user.id,
+        userName: user.name || user.email,
+        metadata: { successCount: result.successCount, errorCount: result.errorCount },
+      });
     }
 
-    // 10. Return result
+    // 11. Return result
     return NextResponse.json({
       message: `Import complete: ${result.successCount} imported, ${result.errorCount} failed`,
       result,

@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/permissions";
 import { askLoop, isChatError } from "@/lib/ai/chat";
 import { z } from "zod";
+import { createLog } from "@/lib/logs";
 
 // ── Validation Schema ───────────────────────
 
@@ -45,6 +46,16 @@ export async function POST(request: NextRequest) {
     }
 
     const response = await askLoop(result.data.question, user.workspaceId);
+
+    // Log the Ask LOOP query
+    createLog({
+      workspaceId: user.workspaceId,
+      action: "ask.query",
+      message: `Asked LOOP: "${result.data.question.substring(0, 50)}${result.data.question.length > 50 ? '...' : ''}"`,
+      userId: user.id,
+      userName: user.name || user.email,
+      metadata: { questionLength: result.data.question.length, hasEvidence: response.hasEvidence },
+    });
 
     return NextResponse.json({
       answer: response.answer,

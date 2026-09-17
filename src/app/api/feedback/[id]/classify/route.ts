@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/permissions";
 import { db } from "@/lib/db";
 import { reclassifyAndPersist } from "@/lib/ai/integration";
+import { createLog } from "@/lib/logs";
 
 export async function POST(
   request: NextRequest,
@@ -80,6 +81,16 @@ export async function POST(
         { status: 500 }
       );
     }
+
+    // Log the reclassification
+    createLog({
+      workspaceId: user.workspaceId,
+      action: "feedback.reclassified",
+      message: `Reclassified feedback ${params.id} with Claude AI`,
+      userId: user.id,
+      userName: user.name || user.email,
+      metadata: { feedbackId: params.id, sentiment: classification.sentiment, themeCount: classification.themes.length },
+    });
 
     // 4. Re-fetch the updated feedback with new themes
     const updatedFeedback = await db.feedback.findFirst({

@@ -11,6 +11,7 @@ import {
   feedbackQuerySchema,
 } from "@/lib/validations/feedback";
 import { classifyAndPersistSafe, generateAndPersistEmbeddingSafe } from "@/lib/ai/integration";
+import { createLog } from "@/lib/logs";
 
 // ── POST: Create Feedback ─────────────────────
 
@@ -75,6 +76,16 @@ export async function POST(request: NextRequest) {
         { status: 502 }
       );
     }
+
+    // 6. Log the action
+    createLog({
+      workspaceId: user.workspaceId,
+      action: "feedback.created",
+      message: `New ${result.data.channel} feedback submitted${result.data.customerLabel ? ` from ${result.data.customerLabel}` : ""}`,
+      userId: user.id,
+      userName: user.name || user.email,
+      metadata: { feedbackId: feedback.id, channel: result.data.channel },
+    });
 
     return NextResponse.json({ feedback }, { status: 201 });
   } catch (error) {

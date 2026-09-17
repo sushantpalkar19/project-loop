@@ -2,6 +2,7 @@ import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { compare } from "bcryptjs";
 import { db } from "@/lib/db";
+import { createLog } from "@/lib/logs";
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -47,6 +48,16 @@ export const authOptions: NextAuthOptions = {
         if (!isPasswordValid) {
           return null;
         }
+
+        // Log successful login
+        createLog({
+          workspaceId: user.workspaceId,
+          action: "auth.login_success",
+          message: `User ${user.email} logged in`,
+          userId: user.id,
+          userName: user.name || user.email,
+          metadata: { email: user.email },
+        });
 
         return {
           id: user.id,

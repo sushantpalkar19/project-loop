@@ -8,7 +8,7 @@
 import { z } from "zod";
 import { CHAT_MODEL } from "./chat";
 import { getGeminiClient, isGeminiAvailable } from "./embeddings";
-import { parseGeminiError } from "./gemini-errors";
+import { parseGeminiError, type ParsedGeminiError } from "./gemini-errors";
 import {
   reportNarrativeSchema,
   type ReportNarrative,
@@ -16,6 +16,8 @@ import {
 } from "@/lib/validations/reports";
 
 const REPORT_MAX_TOKENS = 4096;
+const MAX_RETRIES = 3;
+const REQUEST_TIMEOUT_MS = 60000; // 60 seconds
 
 type ReportFactsForNarrative = Pick<
   VoiceOfCustomerReportContent,
@@ -29,6 +31,8 @@ export type ReportNarrativeErrorCode =
   | "GEMINI_AUTH_FAILED"
   | "GEMINI_UNSUPPORTED_MODEL"
   | "GEMINI_INVALID_REQUEST"
+  | "GEMINI_SERVICE_UNAVAILABLE"
+  | "GEMINI_TIMEOUT"
   | "MALFORMED_RESPONSE"
   | "SCHEMA_VALIDATION_ERROR";
 
@@ -56,24 +60,76 @@ export async function generateReportNarrative(
     systemInstruction: buildSystemInstruction(),
   });
 
-  let responseText: string;
-  try {
-    const result = await model.generateContent({
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: buildUserPrompt(facts) }],
-        },
-      ],
-      generationConfig: {
-        maxOutputTokens: REPORT_MAX_TOKENS,
-        temperature: 0.2,
-      },
-    });
+  let lastError: unknown;
+  let responseText: string | undefined;
 
-    responseText = result.response.text();
-  } catch (error) {
-    throw mapGeminiReportError(error);
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const result = await withTimeout(
+        model.generateContent({
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: buildUserPrompt(facts) }],
+            },
+          ],
+          generationConfig: {
+            maxOutputTokens: REPORT_MAX_TOKENS,
+            temperature: 0.2,
+          },
+        }),
+        REQUEST_TIMEOUT_MS
+      );
+
+      responseText = result.response.text();
+      break;
+    } catch (error) {
+      lastError = error;
+
+      // Check for timeout
+      if (error instanceof Error && error.message.includes("timed out")) {
+        console.error(
+          `[Gemini report generation] Attempt ${attempt + 1}/${MAX_RETRIES} timed out`
+        );
+
+        if (attempt === MAX_RETRIES - 1) {
+          throw createReportNarrativeError(
+            "GEMINI_TIMEOUT",
+            "Gemini request timed out. Please try again.",
+            504
+          );
+        }
+
+        const backoffMs = Math.pow(2, attempt) * 1000;
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+        continue;
+      }
+
+      const parsedError = parseGeminiError(error, "report generation");
+
+      // Log retry attempt without exposing sensitive data
+      console.error(
+        `[Gemini report generation] Attempt ${attempt + 1}/${MAX_RETRIES} failed: ${parsedError.kind}`
+      );
+
+      // Don't retry on permanent errors
+      if (
+        parsedError.kind === "auth_failed" ||
+        parsedError.kind === "unsupported_model" ||
+        parsedError.kind === "invalid_request"
+      ) {
+        throw mapGeminiReportError(error);
+      }
+
+      // Don't retry on last attempt
+      if (attempt === MAX_RETRIES - 1) {
+        throw mapGeminiReportError(error);
+      }
+
+      // Exponential backoff: 1s, 2s, 4s
+      const backoffMs = Math.pow(2, attempt) * 1000;
+      await new Promise((resolve) => setTimeout(resolve, backoffMs));
+    }
   }
 
   if (!responseText || responseText.trim().length === 0) {
@@ -97,6 +153,19 @@ export async function generateReportNarrative(
   }
 
   return validation.data;
+}
+
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number
+): Promise<T> {
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => {
+      reject(new Error(`Request timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+  });
+
+  return Promise.race([promise, timeoutPromise]);
 }
 
 function buildSystemInstruction(): string {
@@ -186,6 +255,8 @@ function geminiKindToReportCode(
       return "GEMINI_UNSUPPORTED_MODEL";
     case "invalid_request":
       return "GEMINI_INVALID_REQUEST";
+    case "api_error":
+      return "GEMINI_SERVICE_UNAVAILABLE";
     default:
       return "GEMINI_FAILED";
   }
