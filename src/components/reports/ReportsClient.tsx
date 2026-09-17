@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BarChart3,
   Calendar,
+  Download,
   FileText,
   Loader2,
   MessageSquareQuote,
@@ -115,6 +116,7 @@ export default function ReportsClient() {
   );
   const [loadingReports, setLoadingReports] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [downloadingPDF, setDownloadingPDF] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [isRetryable, setIsRetryable] = useState(false);
@@ -216,6 +218,35 @@ export default function ReportsClient() {
     setEndDate(e);
   }
 
+  async function handleDownloadPDF(reportId: string, reportTitle: string) {
+    setDownloadingPDF(reportId);
+    try {
+      const response = await fetch(`/api/reports/${reportId}/pdf`);
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to download PDF");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `LOOP-VoC-Report-${reportTitle.replace(/\s+/g, "_")}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      success("PDF downloaded successfully", "Download Complete");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to download PDF";
+      toastError(msg, "Download Error");
+    } finally {
+      setDownloadingPDF(null);
+    }
+  }
+
   return (
     <div className="space-y-6 animate-in fade-in duration-150">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white rounded-2xl border border-slate-200/80 p-6 shadow-2xs">
@@ -303,7 +334,11 @@ export default function ReportsClient() {
           {generating && !selectedReport ? (
             <GeneratingState />
           ) : selectedReport ? (
-            <ReportDisplay report={selectedReport} />
+            <ReportDisplay 
+              report={selectedReport} 
+              onDownloadPDF={handleDownloadPDF}
+              downloadingPDF={downloadingPDF}
+            />
           ) : (
             <EmptyReportState loading={loadingReports} canGenerate={canGenerate} />
           )}
@@ -314,13 +349,19 @@ export default function ReportsClient() {
           selectedReportId={selectedReport?.id ?? null}
           loading={loadingReports}
           onSelect={setSelectedReport}
+          onDownloadPDF={handleDownloadPDF}
+          downloadingPDF={downloadingPDF}
         />
       </div>
     </div>
   );
 }
 
-function ReportDisplay({ report }: { report: ReportRecord }) {
+function ReportDisplay({ report, onDownloadPDF, downloadingPDF }: { 
+  report: ReportRecord; 
+  onDownloadPDF: (reportId: string, reportTitle: string) => Promise<void>;
+  downloadingPDF: string | null;
+}) {
   const content = report.contentJson;
   const stats = content.statistics;
   const negative = stats.sentimentDistribution.NEG;
@@ -329,7 +370,7 @@ function ReportDisplay({ report }: { report: ReportRecord }) {
     <div className="space-y-6">
       <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-2xs">
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-          <div>
+          <div className="flex-1">
             <div className="flex items-center gap-2 mb-2">
               <Badge variant="primary" size="sm" className="font-bold">
                 {content.reportType.replaceAll("_", " ")}
@@ -348,13 +389,31 @@ function ReportDisplay({ report }: { report: ReportRecord }) {
               </span>
             </p>
           </div>
-          <div className="text-left md:text-right">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              Period
-            </p>
-            <p className="text-sm font-bold text-slate-900">
-              {content.period.label}
-            </p>
+          <div className="flex flex-col md:flex-row md:items-center gap-4">
+            <div className="text-left md:text-right">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                Period
+              </p>
+              <p className="text-sm font-bold text-slate-900">
+                {content.period.label}
+              </p>
+            </div>
+            <Button
+              onClick={() => onDownloadPDF(report.id, report.title)}
+              disabled={downloadingPDF === report.id}
+              variant="outline"
+              size="sm"
+              className="h-9 text-xs font-semibold whitespace-nowrap"
+              leftIcon={
+                downloadingPDF === report.id ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Download className="w-3.5 h-3.5" />
+                )
+              }
+            >
+              {downloadingPDF === report.id ? "Downloading..." : "Download PDF"}
+            </Button>
           </div>
         </div>
       </div>
@@ -716,11 +775,15 @@ function PreviousReports({
   selectedReportId,
   loading,
   onSelect,
+  onDownloadPDF,
+  downloadingPDF,
 }: {
   reports: ReportRecord[];
   selectedReportId: string | null;
   loading: boolean;
   onSelect: (report: ReportRecord) => void;
+  onDownloadPDF: (reportId: string, reportTitle: string) => Promise<void>;
+  downloadingPDF: string | null;
 }) {
   return (
     <Card className="h-fit xl:sticky xl:top-24">
@@ -750,23 +813,43 @@ function PreviousReports({
         ) : (
           <div className="space-y-2">
             {reports.map((report) => (
-              <button
+              <div
                 key={report.id}
-                onClick={() => onSelect(report)}
                 className={cn(
-                  "w-full text-left rounded-xl border p-3.5 transition-colors",
+                  "rounded-xl border p-3.5 transition-colors",
                   selectedReportId === report.id
                     ? "border-indigo-300 bg-indigo-50/80 shadow-2xs"
                     : "border-slate-200 bg-white hover:bg-slate-50"
                 )}
               >
-                <p className="text-xs font-bold text-slate-900 line-clamp-2">
-                  {report.title}
-                </p>
-                <p className="text-[11px] text-slate-500 mt-1 font-mono">
-                  {formatDate(report.createdAt)}
-                </p>
-              </button>
+                <button
+                  onClick={() => onSelect(report)}
+                  className="w-full text-left"
+                >
+                  <p className="text-xs font-bold text-slate-900 line-clamp-2">
+                    {report.title}
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-1 font-mono">
+                    {formatDate(report.createdAt)}
+                  </p>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDownloadPDF(report.id, report.title);
+                  }}
+                  disabled={downloadingPDF === report.id}
+                  className="mt-2 w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50/50 rounded-lg py-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Download PDF"
+                >
+                  {downloadingPDF === report.id ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Download className="w-3 h-3" />
+                  )}
+                  {downloadingPDF === report.id ? "Downloading..." : "Download PDF"}
+                </button>
+              </div>
             ))}
           </div>
         )}
