@@ -17,8 +17,8 @@ import { createLog } from "@/lib/logs";
 
 export async function POST(request: NextRequest) {
   try {
-    // 1. Authenticate + require ADMIN or ANALYST
-    const user = await requireRole(["ADMIN", "ANALYST"]);
+    // 1. Authenticate + require ADMIN, MANAGER, or ANALYST
+    const user = await requireRole(["ADMIN", "MANAGER", "ANALYST"]);
 
     // 2. Validate request body
     const body = await request.json();
@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     // 1. Authenticate
-    const user = await requireRole(["ADMIN", "ANALYST", "VIEWER"]);
+    const user = await requireRole(["ADMIN", "MANAGER", "ANALYST", "VIEWER"]);
 
     // 2. Parse query parameters
     const { searchParams } = new URL(request.url);

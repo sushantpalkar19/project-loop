@@ -23,8 +23,8 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    // 1. Authenticate + require ADMIN or ANALYST
-    const user = await requireRole(["ADMIN", "ANALYST"]);
+    // 1. Authenticate + require ADMIN, MANAGER, or ANALYST
+    const user = await requireRole(["ADMIN", "MANAGER", "ANALYST"]);
 
     // 2. Find feedback — workspace scoped
     const feedback = await db.feedback.findFirst({

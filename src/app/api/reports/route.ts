@@ -30,7 +30,7 @@ function isRetryableReportError(code: ReportGenerationErrorCode): boolean {
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await requireRole(["ADMIN", "ANALYST", "VIEWER"]);
+    const user = await requireRole(["ADMIN", "MANAGER", "ANALYST", "VIEWER"]);
 
     const { searchParams } = new URL(request.url);
     const queryResult = reportListQuerySchema.safeParse({
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await requireRole(["ADMIN", "ANALYST"]);
+    const user = await requireRole(["ADMIN", "MANAGER", "ANALYST"]);
     const body = await request.json();
     const result = generateReportRequestSchema.safeParse(body);
 

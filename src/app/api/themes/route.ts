@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(_request: NextRequest) {
   try {
-    const user = await requireRole(["ADMIN", "ANALYST", "VIEWER"]);
+    const user = await requireRole(["ADMIN", "MANAGER", "ANALYST", "VIEWER"]);
 
     const themes = await db.theme.findMany({
       where: { workspaceId: user.workspaceId },

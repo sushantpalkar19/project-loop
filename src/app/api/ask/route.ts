@@ -33,7 +33,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await requireRole(["ADMIN", "ANALYST", "VIEWER"]);
+    const user = await requireRole(["ADMIN", "MANAGER", "ANALYST", "VIEWER"]);
 
     const body = await request.json();
     const result = askRequestSchema.safeParse(body);

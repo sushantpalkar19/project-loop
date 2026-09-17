@@ -146,10 +146,10 @@ function generateBatch(count: number) {
 
 const BATCH_SIZE = 10;
 
-export async function POST(_request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    // 1. Authenticate + require ADMIN or ANALYST
-    const user = await requireRole(["ADMIN", "ANALYST"]);
+    // 1. Authenticate + require ADMIN, MANAGER, or ANALYST
+    const user = await requireRole(["ADMIN", "MANAGER", "ANALYST"]);
 
     // 2. Generate realistic feedback records
     const records = generateBatch(BATCH_SIZE);

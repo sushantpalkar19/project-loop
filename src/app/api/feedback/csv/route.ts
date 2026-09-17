@@ -154,8 +154,8 @@ function validateRow(row: CsvRow, rowNum: number): string[] {
 
 export async function POST(request: NextRequest) {
   try {
-    // 1. Authenticate + require ADMIN or ANALYST
-    const user = await requireRole(["ADMIN", "ANALYST"]);
+    // 1. Authenticate + require ADMIN, MANAGER, or ANALYST
+    const user = await requireRole(["ADMIN", "MANAGER", "ANALYST"]);
 
     // 2. Parse multipart form data
     const formData = await request.formData();

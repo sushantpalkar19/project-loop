@@ -2,14 +2,16 @@
  * PATCH /api/workspace/members/:id
  *
  * Updates a member's role within the authenticated user's workspace.
- * Requires ADMIN role.
+ * Requires ADMIN or MANAGER role.
+ * MANAGER cannot grant ADMIN role or modify existing ADMIN users.
  *
  * Request body: { role: "ADMIN" | "MANAGER" | "ANALYST" | "VIEWER" }
  *
  * DELETE /api/workspace/members/:id
  *
  * Removes a member from the authenticated user's workspace.
- * Requires ADMIN role.
+ * Requires ADMIN or MANAGER role.
+ * MANAGER cannot remove ADMIN users.
  */
 
 import { NextResponse } from "next/server";
@@ -31,8 +33,8 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    // 1. Authenticate + require ADMIN
-    const admin = await requireRole(["ADMIN"]);
+    // 1. Authenticate + require ADMIN or MANAGER
+    const user = await requireRole(["ADMIN", "MANAGER"]);
 
     // 2. Parse and validate request body
     const body = await request.json();
@@ -40,7 +42,7 @@ export async function PATCH(
 
     if (!result.success) {
       return NextResponse.json(
-        { error: "Invalid role. Must be ADMIN, ANALYST, or VIEWER" },
+        { error: "Invalid role. Must be ADMIN, MANAGER, ANALYST, or VIEWER" },
         { status: 400 }
       );
     }
@@ -52,7 +54,7 @@ export async function PATCH(
     const targetUser = await db.user.findFirst({
       where: {
         id: targetUserId,
-        workspaceId: admin.workspaceId,
+        workspaceId: user.workspaceId,
       },
       select: {
         id: true,
@@ -69,15 +71,31 @@ export async function PATCH(
       );
     }
 
-    // 4. Prevent self-demotion (optional safety measure)
-    if (targetUser.id === admin.id && role !== "ADMIN") {
+    // 4. MANAGER privilege escalation checks
+    if (user.role === "MANAGER") {
+      if (role === "ADMIN") {
+        return NextResponse.json(
+          { error: "Managers cannot grant ADMIN role" },
+          { status: 403 }
+        );
+      }
+      if (targetUser.role === "ADMIN") {
+        return NextResponse.json(
+          { error: "Managers cannot modify Admin accounts" },
+          { status: 403 }
+        );
+      }
+    }
+
+    // 5. Prevent self-demotion (optional safety measure)
+    if (targetUser.id === user.id && targetUser.role === "ADMIN" && role !== "ADMIN") {
       return NextResponse.json(
         { error: "Cannot change your own admin role" },
         { status: 400 }
       );
     }
 
-    // 5. Update the role
+    // 6. Update the role
     const updatedUser = await db.user.update({
       where: { id: targetUserId },
       data: { role },
@@ -89,13 +107,13 @@ export async function PATCH(
       },
     });
 
-    // 6. Log the role change
+    // 7. Log the role change
     createLog({
-      workspaceId: admin.workspaceId,
+      workspaceId: user.workspaceId,
       action: "member.role_changed",
       message: `Changed ${targetUser.email} role from ${targetUser.role} to ${role}`,
-      userId: admin.id,
-      userName: admin.name || admin.email,
+      userId: user.id,
+      userName: user.name || user.email,
       metadata: { targetUserId: targetUser.id, email: targetUser.email, fromRole: targetUser.role, toRole: role },
     });
 
@@ -122,13 +140,13 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    // 1. Authenticate + require ADMIN
-    const admin = await requireRole(["ADMIN"]);
+    // 1. Authenticate + require ADMIN or MANAGER
+    const user = await requireRole(["ADMIN", "MANAGER"]);
 
     const targetUserId = params.id;
 
     // 2. Prevent self-deletion
-    if (targetUserId === admin.id) {
+    if (targetUserId === user.id) {
       return NextResponse.json(
         { error: "Cannot remove your own account" },
         { status: 400 }
@@ -139,7 +157,7 @@ export async function DELETE(
     const targetUser = await db.user.findFirst({
       where: {
         id: targetUserId,
-        workspaceId: admin.workspaceId,
+        workspaceId: user.workspaceId,
       },
       select: {
         id: true,
@@ -156,10 +174,11 @@ export async function DELETE(
       );
     }
 
-    // 4. Prevent deleting other ADMINs (workspace owners)
+    // 4. Prevent deleting ADMIN users (workspace owners)
+    // Both ADMIN and MANAGER cannot delete ADMIN users
     if (targetUser.role === "ADMIN") {
       return NextResponse.json(
-        { error: "Cannot remove other Admin users from the workspace" },
+        { error: "Cannot remove Admin users from the workspace" },
         { status: 403 }
       );
     }
@@ -171,11 +190,11 @@ export async function DELETE(
 
     // 6. Log the removal
     createLog({
-      workspaceId: admin.workspaceId,
+      workspaceId: user.workspaceId,
       action: "member.removed",
       message: `Removed member ${targetUser.email} (${targetUser.role}) from workspace`,
-      userId: admin.id,
-      userName: admin.name || admin.email,
+      userId: user.id,
+      userName: user.name || user.email,
       metadata: { removedUserId: targetUserId, email: targetUser.email, role: targetUser.role },
     });
 

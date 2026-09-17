@@ -59,7 +59,7 @@ function endOfDay(date: Date): Date {
 export async function GET(request: NextRequest) {
   try {
     // 1. Authenticate — all roles may read analytics
-    const user = await requireRole(["ADMIN", "ANALYST", "VIEWER"]);
+    const user = await requireRole(["ADMIN", "MANAGER", "ANALYST", "VIEWER"]);
 
     // 2. Parse optional date range
     const { searchParams } = new URL(request.url);

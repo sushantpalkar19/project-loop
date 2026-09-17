@@ -18,7 +18,7 @@ export async function GET(
 ) {
   try {
     // 1. Authenticate
-    const user = await requireRole(["ADMIN", "ANALYST", "VIEWER"]);
+    const user = await requireRole(["ADMIN", "MANAGER", "ANALYST", "VIEWER"]);
 
     // 2. Find feedback — scoped to workspace
     const feedback = await db.feedback.findFirst({
@@ -85,8 +85,8 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    // 1. Authenticate + require ADMIN or ANALYST
-    const user = await requireRole(["ADMIN", "ANALYST"]);
+    // 1. Authenticate + require ADMIN, MANAGER, or ANALYST
+    const user = await requireRole(["ADMIN", "MANAGER", "ANALYST"]);
 
     // 2. Validate request body
     const body = await request.json();
@@ -176,8 +176,8 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    // 1. Authenticate + require ADMIN or ANALYST
-    const user = await requireRole(["ADMIN", "ANALYST"]);
+    // 1. Authenticate + require ADMIN, MANAGER, or ANALYST
+    const user = await requireRole(["ADMIN", "MANAGER", "ANALYST"]);
 
     // 2. Find existing feedback — workspace scoped
     const existing = await db.feedback.findFirst({
