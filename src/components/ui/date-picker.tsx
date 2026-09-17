@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   Calendar as CalendarIcon,
   ChevronDown,
@@ -35,13 +36,83 @@ export function DateRangePicker({
   const [tempEnd, setTempEnd] = useState(endDate);
   const [activePreset, setActivePreset] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     setTempStart(startDate);
     setTempEnd(endDate);
   }, [startDate, endDate]);
+
+  // Calculate popover position when opening
+  useEffect(() => {
+    if (isOpen && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      const popoverWidth = 380; // Base width
+      const popoverHeight = 400; // Approximate height
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+
+      let left = rect.left;
+      let top = rect.bottom + 8; // 8px gap
+
+      // Adjust horizontal position to keep within viewport
+      if (align === "right") {
+        left = rect.right - popoverWidth;
+      }
+
+      // Ensure popover doesn't go off-screen horizontally
+      if (left < 8) left = 8;
+      if (left + popoverWidth > viewportWidth - 8) {
+        left = viewportWidth - popoverWidth - 8;
+      }
+
+      // Ensure popover doesn't go off-screen vertically
+      if (top + popoverHeight > viewportHeight - 8) {
+        top = rect.top - popoverHeight - 8;
+      }
+
+      setPopoverPosition({ top, left });
+    }
+  }, [isOpen, align]);
+
+  // Update position on window resize
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleResize = () => {
+      if (triggerRef.current) {
+        const rect = triggerRef.current.getBoundingClientRect();
+        const popoverWidth = 380;
+        const popoverHeight = 400;
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+
+        let left = rect.left;
+        let top = rect.bottom + 8;
+
+        if (align === "right") {
+          left = rect.right - popoverWidth;
+        }
+
+        if (left < 8) left = 8;
+        if (left + popoverWidth > viewportWidth - 8) {
+          left = viewportWidth - popoverWidth - 8;
+        }
+
+        if (top + popoverHeight > viewportHeight - 8) {
+          top = rect.top - popoverHeight - 8;
+        }
+
+        setPopoverPosition({ top, left });
+      }
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [isOpen, align]);
 
   // Click outside to close
   useEffect(() => {
@@ -178,6 +249,7 @@ export function DateRangePicker({
 
       {/* Trigger Button */}
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
@@ -222,15 +294,17 @@ export function DateRangePicker({
       </button>
 
       {/* Popover Dropdown */}
-      {isOpen && (
-        <div
-          className={cn(
-            "absolute mt-2 w-[360px] sm:w-[380px] max-w-[calc(100vw-32px)] rounded-2xl bg-white border border-slate-200/90 shadow-2xl p-4 sm:p-5 z-50 animate-in fade-in zoom-in-95 duration-150 space-y-4",
-            align === "right" ? "right-0" : "left-0"
-          )}
-          role="dialog"
-          aria-label="Select reporting period"
-        >
+      {isOpen &&
+        createPortal(
+          <div
+            className="fixed w-[360px] sm:w-[380px] max-w-[calc(100vw-32px)] rounded-2xl bg-white border border-slate-200/90 shadow-2xl p-4 sm:p-5 z-[9999] animate-in fade-in zoom-in-95 duration-150 space-y-4"
+            style={{
+              top: `${popoverPosition.top}px`,
+              left: `${popoverPosition.left}px`,
+            }}
+            role="dialog"
+            aria-label="Select reporting period"
+          >
           {/* Header */}
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <span className="text-xs font-bold text-slate-900 flex items-center gap-2">
@@ -359,8 +433,9 @@ export function DateRangePicker({
               </Button>
             </div>
           </div>
-        </div>
-      )}
+        </div>,
+          document.body
+        )}
     </div>
   );
 }
