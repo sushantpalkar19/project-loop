@@ -36,6 +36,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
 
   const user = session?.user;
   const isAdmin = user?.role === "ADMIN";
+  const isManager = user?.role === "MANAGER";
 
   const mainNavItems = [
     {
@@ -43,35 +44,35 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
       href: "/dashboard",
       icon: LayoutDashboard,
       active: pathname === "/dashboard",
-      roles: ["ADMIN", "ANALYST", "VIEWER"],
+      roles: ["ADMIN", "MANAGER", "ANALYST", "VIEWER"],
     },
     {
       label: "Feedback Inbox",
       href: "/feedback",
       icon: MessageSquare,
       active: pathname.startsWith("/feedback"),
-      roles: ["ADMIN", "ANALYST", "VIEWER"],
+      roles: ["ADMIN", "MANAGER", "ANALYST", "VIEWER"],
     },
     {
       label: "Insights & Trends",
       href: "/trends",
       icon: TrendingUp,
       active: pathname.startsWith("/trends") || pathname.startsWith("/insights"),
-      roles: ["ADMIN", "ANALYST", "VIEWER"],
+      roles: ["ADMIN", "MANAGER", "ANALYST", "VIEWER"],
     },
     {
       label: "Ask LOOP AI",
       href: "/ask",
       icon: Sparkles,
       active: pathname.startsWith("/ask"),
-      roles: ["ADMIN", "ANALYST", "VIEWER"],
+      roles: ["ADMIN", "MANAGER", "ANALYST", "VIEWER"],
     },
     {
       label: "VoC Reports",
       href: "/reports",
       icon: BarChart3,
       active: pathname.startsWith("/reports"),
-      roles: ["ADMIN", "ANALYST", "VIEWER"],
+      roles: ["ADMIN", "MANAGER", "ANALYST", "VIEWER"],
     },
   ];
 
@@ -81,14 +82,14 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
       href: "/workspace",
       icon: Users,
       active: pathname.startsWith("/workspace"),
-      roles: ["ADMIN"],
+      roles: ["ADMIN", "MANAGER"],
     },
     {
       label: "Workspace Settings",
       href: "/settings",
       icon: Settings,
       active: pathname.startsWith("/settings"),
-      roles: ["ADMIN"],
+      roles: ["ADMIN", "MANAGER", "ANALYST", "VIEWER"],
     },
     {
       label: "Activity Logs",
@@ -106,6 +107,8 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const visibleAdminItems = adminNavItems.filter(
     (item) => user?.role && item.roles.includes(user.role)
   );
+  const showWorkspaceAdminSection =
+    (isAdmin || isManager) && visibleAdminItems.length > 0;
 
   const sidebarContent = (
     <div className="flex flex-col h-full bg-slate-950 text-slate-300 w-64 border-r border-slate-800/80 shadow-xl select-none">
@@ -191,10 +194,10 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
         </div>
 
         {/* Workspace Admin Section */}
-        {isAdmin && visibleAdminItems.length > 0 && (
+        {showWorkspaceAdminSection && (
           <div>
             <div className="text-[10px] font-bold tracking-widest text-slate-500 uppercase px-3 mb-2">
-              Workspace Admin
+              {isAdmin ? "Workspace Admin" : "Workspace Management"}
             </div>
             <div className="space-y-1">
               {visibleAdminItems.map((item) => {
@@ -249,6 +252,8 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
               variant={
                 user.role === "ADMIN"
                   ? "purple"
+                  : user.role === "MANAGER"
+                  ? "info"
                   : user.role === "ANALYST"
                   ? "info"
                   : "neutral"

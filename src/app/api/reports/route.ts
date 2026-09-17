@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/permissions";
+import { ROLE_GROUPS } from "@/lib/rbac";
 import {
   generateReportRequestSchema,
   normalizeReportDateRange,
@@ -30,7 +31,7 @@ function isRetryableReportError(code: ReportGenerationErrorCode): boolean {
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await requireRole(["ADMIN", "MANAGER", "ANALYST", "VIEWER"]);
+    const user = await requireRole([...ROLE_GROUPS.reportsRead]);
 
     const { searchParams } = new URL(request.url);
     const queryResult = reportListQuerySchema.safeParse({
@@ -64,7 +65,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await requireRole(["ADMIN", "MANAGER", "ANALYST"]);
+    const user = await requireRole([...ROLE_GROUPS.reportsWrite]);
     const body = await request.json();
     const result = generateReportRequestSchema.safeParse(body);
 

@@ -43,6 +43,12 @@ const USERS = [
     role: Role.ADMIN,
   },
   {
+    id: "demo-user-manager-001",
+    name: "Jordan Lee",
+    email: "manager@loop.demo",
+    role: Role.MANAGER,
+  },
+  {
     id: "demo-user-analyst-001",
     name: "Marcus Johnson",
     email: "analyst@loop.demo",

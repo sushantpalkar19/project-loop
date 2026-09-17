@@ -1,12 +1,13 @@
 /**
  * GET /api/reports/[id]/pdf -- Download a report as PDF
  *
- * Requires authenticated session with ADMIN, ANALYST, or VIEWER role.
+ * Requires authenticated session with ADMIN, MANAGER, ANALYST, or VIEWER role.
  * Workspace isolation is enforced through the session workspaceId.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/permissions";
+import { ROLE_GROUPS } from "@/lib/rbac";
 import { db } from "@/lib/db";
 import { generateReportPDF } from "@/lib/pdf/report-pdf";
 import type { VoiceOfCustomerReportContent } from "@/lib/validations/reports";
@@ -16,7 +17,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const user = await requireRole(["ADMIN", "MANAGER", "ANALYST", "VIEWER"]);
+    const user = await requireRole([...ROLE_GROUPS.reportsRead]);
 
     const reportId = params.id;
 
@@ -73,6 +74,12 @@ export async function GET(
       },
     });
   } catch (error) {
+    if (error instanceof Error && error.name === "AuthError") {
+      const authErr = error as unknown as { code: string; message: string };
+      const status = authErr.code === "UNAUTHORIZED" ? 401 : 403;
+      return NextResponse.json({ error: authErr.message }, { status });
+    }
+
     console.error("PDF generation error:", error);
     return NextResponse.json(
       { error: "Failed to generate PDF" },

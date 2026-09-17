@@ -25,6 +25,9 @@ export default function TeamManagement() {
   const isAdmin = user?.role === "ADMIN";
   const isManager = user?.role === "MANAGER";
   const canManage = isAdmin || isManager;
+  const assignableRoles: Member["role"][] = isAdmin
+    ? ["ADMIN", "MANAGER", "ANALYST", "VIEWER"]
+    : ["MANAGER", "ANALYST", "VIEWER"];
   const { success, error: toastError, info } = useToast();
 
   const [members, setMembers] = useState<Member[]>([]);
@@ -177,7 +180,7 @@ export default function TeamManagement() {
             <div className="flex items-center gap-2">
               <Badge variant="primary" size="sm" className="bg-indigo-500/20 text-indigo-300 border-indigo-500/30 font-semibold">
                 <Users className="w-3.5 h-3.5 mr-1" />
-                ADMIN TEAM CONTROLS
+                {isAdmin ? "ADMIN TEAM CONTROLS" : "MANAGER TEAM CONTROLS"}
               </Badge>
             </div>
             <h1 className="text-2xl font-extrabold tracking-tight text-white">
@@ -189,7 +192,7 @@ export default function TeamManagement() {
           </div>
 
           <div className="flex items-center gap-2">
-            {isAdmin && (
+            {canManage && (
               <Button
                 onClick={() => setShowAddForm(!showAddForm)}
                 variant="primary"
@@ -393,77 +396,86 @@ export default function TeamManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {members.map((member) => (
-                  <TableRow key={member.id}>
-                    <TableCell className="font-bold text-slate-900">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-xs border border-indigo-200 shrink-0">
-                          {(member.name || member.email || "M").charAt(0).toUpperCase()}
+                {members.map((member) => {
+                  const isSelf = member.id === user?.id;
+                  const managerCannotModifyAdmin =
+                    isManager && member.role === "ADMIN";
+
+                  return (
+                    <TableRow key={member.id}>
+                      <TableCell className="font-bold text-slate-900">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-xs border border-indigo-200 shrink-0">
+                            {(member.name || member.email || "M").charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <span className="text-xs font-bold block">{member.name || "Workspace Member"}</span>
+                            {isSelf && (
+                              <span className="text-[10px] text-indigo-600 font-bold font-mono">
+                                (You - Current Session)
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <div>
-                          <span className="text-xs font-bold block">{member.name || "Workspace Member"}</span>
-                          {member.id === user?.id && (
-                            <span className="text-[10px] text-indigo-600 font-bold font-mono">
-                              (You - Current Session)
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-xs text-slate-600 font-mono">
-                      {member.email}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          member.role === "ADMIN"
-                            ? "purple"
-                            : member.role === "MANAGER"
-                            ? "info"
-                            : member.role === "ANALYST"
-                            ? "info"
-                            : "neutral"
-                        }
-                        size="sm"
-                        className="font-bold"
-                      >
-                        {member.role}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-xs text-slate-500 font-mono">
-                      {new Date(member.createdAt).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {member.id === user?.id ? (
-                        <span className="text-xs text-slate-400 italic">Self (Admin)</span>
-                      ) : (
-                        <div className="flex items-center justify-end gap-2">
-                          <select
-                            value={member.role}
-                            disabled={updatingId === member.id}
-                            onChange={(e) => handleRoleChange(member.id, member.email, e.target.value)}
-                            className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
-                          >
-                            <option value="ADMIN">ADMIN</option>
-                            <option value="MANAGER">MANAGER</option>
-                            <option value="ANALYST">ANALYST</option>
-                            <option value="VIEWER">VIEWER</option>
-                          </select>
-                          {member.role !== "ADMIN" && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleRemoveMember(member.id, member.email)}
-                              isLoading={updatingId === member.id}
-                              className="h-8 w-8 p-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50"
-                              leftIcon={<Trash2 className="w-3.5 h-3.5" />}
-                            />
-                          )}
-                        </div>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                      <TableCell className="text-xs text-slate-600 font-mono">
+                        {member.email}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            member.role === "ADMIN"
+                              ? "purple"
+                              : member.role === "MANAGER"
+                              ? "info"
+                              : member.role === "ANALYST"
+                              ? "info"
+                              : "neutral"
+                          }
+                          size="sm"
+                          className="font-bold"
+                        >
+                          {member.role}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs text-slate-500 font-mono">
+                        {new Date(member.createdAt).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {isSelf ? (
+                          <span className="text-xs text-slate-400 italic">Self ({member.role})</span>
+                        ) : managerCannotModifyAdmin ? (
+                          <span className="text-xs text-slate-400 italic">Admin protected</span>
+                        ) : (
+                          <div className="flex items-center justify-end gap-2">
+                            <select
+                              value={member.role}
+                              disabled={updatingId === member.id}
+                              onChange={(e) => handleRoleChange(member.id, member.email, e.target.value)}
+                              className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
+                            >
+                              {assignableRoles.map((role) => (
+                                <option key={role} value={role}>
+                                  {role}
+                                </option>
+                              ))}
+                            </select>
+                            {member.role !== "ADMIN" && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleRemoveMember(member.id, member.email)}
+                                isLoading={updatingId === member.id}
+                                className="h-8 w-8 p-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                                leftIcon={<Trash2 className="w-3.5 h-3.5" />}
+                              />
+                            )}
+                          </div>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}

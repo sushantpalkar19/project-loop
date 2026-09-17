@@ -7,6 +7,10 @@ export const CREDENTIALS = {
     email: process.env.TEST_ADMIN_EMAIL || 'admin@loop.demo',
     password: process.env.TEST_ADMIN_PASSWORD || 'demo-password-change-in-production',
   },
+  manager: {
+    email: process.env.TEST_MANAGER_EMAIL || 'manager@loop.demo',
+    password: process.env.TEST_MANAGER_PASSWORD || 'demo-password-change-in-production',
+  },
   analyst: {
     email: process.env.TEST_ANALYST_EMAIL || 'analyst@loop.demo',
     password: process.env.TEST_ANALYST_PASSWORD || 'demo-password-change-in-production',
@@ -20,9 +24,10 @@ export const CREDENTIALS = {
 /** Log in via the UI and wait for the dashboard to load. */
 export async function loginAs(
   page: Page,
-  role: 'admin' | 'analyst' | 'viewer'
+  role: 'admin' | 'manager' | 'analyst' | 'viewer'
 ) {
   const creds = CREDENTIALS[role];
+  await page.context().clearCookies();
   await page.goto(`${BASE_URL}/login`);
   await page.locator('#email').fill(creds.email);
   await page.locator('#password').fill(creds.password);

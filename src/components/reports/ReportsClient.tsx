@@ -27,6 +27,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { ErrorState } from "@/components/ui/error-state";
 import { cn } from "@/lib/utils";
+import { canGenerateReports } from "@/lib/rbac";
 import type { VoiceOfCustomerReportContent } from "@/lib/validations/reports";
 
 type SentimentKey = "POS" | "NEU" | "NEG";
@@ -104,7 +105,7 @@ function sentimentVariant(sentiment: SentimentKey) {
 export default function ReportsClient() {
   const { data: session } = useSession();
   const role = session?.user?.role;
-  const canGenerate = role === "ADMIN" || role === "ANALYST";
+  const canGenerate = canGenerateReports(role);
   const { success, error: toastError, info } = useToast();
 
   const defaultDates = useMemo(() => getDefaultDateRange(), []);

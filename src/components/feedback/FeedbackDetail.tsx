@@ -5,6 +5,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, Trash2, ArrowRight, Calendar, User, Hash, Tag, Sparkles, Zap } from "lucide-react";
+import { canManageFeedback } from "@/lib/rbac";
 
 interface FeedbackItem {
   id: string;
@@ -53,7 +54,7 @@ export default function FeedbackDetail({
   const [classifyError, setClassifyError] = useState<string | null>(null);
   const [detail, setDetail] = useState<FeedbackItem>(feedback);
 
-  const canEdit = userRole === "ADMIN" || userRole === "ANALYST";
+  const canEdit = canManageFeedback(userRole);
   const nextStatuses = STATUS_TRANSITIONS[detail.status] || [];
 
   async function handleStatusChange(newStatus: string) {

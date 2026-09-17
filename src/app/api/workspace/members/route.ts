@@ -7,7 +7,7 @@
  * POST /api/workspace/members
  *
  * Creates a new member in the authenticated user's workspace.
- * Requires ADMIN role.
+ * Requires ADMIN or MANAGER role (MANAGER may only create MANAGER, ANALYST, or VIEWER).
  *
  * Request body: { email: string, name: string, password: string, role: "MANAGER" | "ANALYST" | "VIEWER" }
  */
@@ -16,6 +16,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { hash } from "bcryptjs";
 import { requireRole } from "@/lib/permissions";
+import { ROLE_GROUPS } from "@/lib/rbac";
 import { db } from "@/lib/db";
 import { createLog } from "@/lib/logs";
 
@@ -24,7 +25,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     // 1. Authenticate + require ADMIN or MANAGER
-    const user = await requireRole(["ADMIN", "MANAGER"]);
+    const user = await requireRole([...ROLE_GROUPS.membersRead]);
 
     // 2. Query members — scoped to authenticated workspace only
     const members = await db.user.findMany({
@@ -67,8 +68,8 @@ const createMemberSchema = z.object({
 
 export async function POST(request: Request) {
   try {
-    // 1. Authenticate + require ADMIN
-    const admin = await requireRole(["ADMIN"]);
+    // 1. Authenticate + require ADMIN or MANAGER
+    const admin = await requireRole([...ROLE_GROUPS.membersWrite]);
 
     // 2. Parse and validate request body
     const body = await request.json();

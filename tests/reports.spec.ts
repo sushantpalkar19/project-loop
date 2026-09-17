@@ -1,7 +1,7 @@
 /**
  * VoC Reports Tests
  * TC-192: VoC report numbers consistent with actual feedback data
- * TC-193: VoC report generation restricted to ADMIN and ANALYST
+ * TC-193: VoC report generation restricted to ADMIN, MANAGER, and ANALYST
  * TC-194: VoC report content generated from period data, not generic filler
  */
 
@@ -59,8 +59,8 @@ test('VoC report numbers are consistent with actual feedback data TC-192', async
   await expect(page.locator('body')).not.toBeEmpty();
 });
 
-// ── TC-193: VoC report generation restricted to ADMIN and ANALYST ─────────────
-test('VoC report generation is restricted to ADMIN and ANALYST roles TC-193', async ({ page }) => {
+// ── TC-193: VoC report generation restricted to ADMIN, MANAGER, and ANALYST ───
+test('VoC report generation is restricted to ADMIN, MANAGER, and ANALYST roles TC-193', async ({ page }) => {
   // VIEWER cannot generate reports
   await loginAs(page, 'viewer');
 
@@ -83,8 +83,18 @@ test('VoC report generation is restricted to ADMIN and ANALYST roles TC-193', as
   });
   expect(viewerRes.status).toBe(403);
 
+  // MANAGER can reach generation validation; invalid dates avoid creating a report.
+  await loginAs(page, 'manager');
+  await page.goto(`${BASE_URL}/reports`);
+  await page.waitForLoadState('networkidle');
+  await expect(page.getByRole('button', { name: /generate report/i })).toBeEnabled();
+  const managerRes = await authenticatedRequest(page, 'POST', '/api/reports', {
+    startDate: 'not-a-date',
+    endDate: '2024-12-31',
+  });
+  expect(managerRes.status).toBe(400);
+
   // ANALYST can generate reports
-  await page.goto(`${BASE_URL}/login`);
   await loginAs(page, 'analyst');
   const analystRes = await authenticatedRequest(page, 'POST', '/api/reports', {
     startDate: '2024-01-01',
@@ -94,7 +104,6 @@ test('VoC report generation is restricted to ADMIN and ANALYST roles TC-193', as
   expect([201, 500, 502]).toContain(analystRes.status);
 
   // ADMIN can generate reports
-  await page.goto(`${BASE_URL}/login`);
   await loginAs(page, 'admin');
   const adminRes = await authenticatedRequest(page, 'POST', '/api/reports', {
     startDate: '2024-01-01',

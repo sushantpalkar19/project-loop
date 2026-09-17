@@ -11,7 +11,8 @@ import CsvUpload from "@/components/feedback/CsvUpload";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { ErrorState } from "@/components/ui/error-state";
-import { Plus, Upload, RefreshCw, Zap } from "lucide-react";
+import { Plus, Upload, Zap } from "lucide-react";
+import { canManageFeedback } from "@/lib/rbac";
 
 // ── Types ─────────────────────────────────────
 
@@ -61,7 +62,7 @@ interface Filters {
 // ── Page Component ────────────────────────────
 
 export default function FeedbackPage() {
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const role = session?.user?.role;
   const { success, error: toastError, info } = useToast();
 
@@ -130,11 +131,20 @@ export default function FeedbackPage() {
 
         const response = await fetch(`/api/feedback?${params.toString()}`);
 
+        const data = await response.json().catch(() => ({}));
+
         if (!response.ok) {
-          throw new Error("Failed to fetch feedback");
+          const apiMessage =
+            typeof data?.error === "string"
+              ? data.error
+              : "Failed to fetch feedback";
+          throw new Error(apiMessage);
         }
 
-        const data = await response.json();
+        if (!Array.isArray(data.feedback) || !data.pagination) {
+          throw new Error("Invalid feedback response from server");
+        }
+
         setFeedback(data.feedback);
         setPagination(data.pagination);
       } catch (err) {
@@ -149,8 +159,16 @@ export default function FeedbackPage() {
   );
 
   useEffect(() => {
+    if (sessionStatus === "loading") {
+      return;
+    }
+    if (sessionStatus === "unauthenticated") {
+      setLoading(false);
+      setError("Authentication required. Please sign in again.");
+      return;
+    }
     fetchFeedback(1);
-  }, [fetchFeedback, refreshKey]);
+  }, [fetchFeedback, refreshKey, sessionStatus]);
 
   // ── Handlers ────────────────────────────────
 
@@ -211,7 +229,13 @@ export default function FeedbackPage() {
 
   // ── Render ──────────────────────────────────
 
-  const canCreate = role === "ADMIN" || role === "ANALYST";
+  const canCreate = canManageFeedback(role);
+
+  const inboxSummary = loading
+    ? "Loading feedback signals…"
+    : error
+      ? "Unable to load feedback count"
+      : `Showing ${pagination.total} recorded feedback signals in your workspace`;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-150">
@@ -221,9 +245,7 @@ export default function FeedbackPage() {
           <h1 className="text-xl font-bold text-slate-900 tracking-tight">
             Feedback Inbox
           </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Showing <span className="font-bold text-slate-800">{pagination.total}</span> recorded feedback signals in your workspace
-          </p>
+          <p className="text-xs text-slate-500 mt-0.5">{inboxSummary}</p>
         </div>
 
         {canCreate && (
@@ -282,12 +304,19 @@ export default function FeedbackPage() {
       )}
 
       {/* Feedback List Container */}
-      <FeedbackList
-        feedback={feedback}
-        loading={loading}
-        onSelect={setSelectedFeedback}
-        userRole={role}
-      />
+      {!error && (
+        <FeedbackList
+          feedback={feedback}
+          loading={loading}
+          onSelect={setSelectedFeedback}
+          userRole={role}
+          canImport={canCreate}
+          onImportCsv={() => setShowCsvUpload(true)}
+          onAddFeedback={() => setShowCreateForm(true)}
+          onSimulate={canCreate ? handleSimulate : undefined}
+          simulating={simulating}
+        />
+      )}
 
       {/* Pagination Container */}
       {pagination.totalPages > 1 && (

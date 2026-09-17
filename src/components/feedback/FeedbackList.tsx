@@ -5,7 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { TableSkeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
-import { MessageSquare, Calendar, User, Hash } from "lucide-react";
+import { MessageSquare, Calendar, User, Hash, Upload, Plus, Zap } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface FeedbackItem {
   id: string;
@@ -32,6 +33,11 @@ interface FeedbackListProps {
   loading: boolean;
   onSelect: (feedback: FeedbackItem) => void;
   userRole?: string;
+  canImport?: boolean;
+  onImportCsv?: () => void;
+  onAddFeedback?: () => void;
+  onSimulate?: () => void;
+  simulating?: boolean;
 }
 
 function truncate(text: string, maxLength: number): string {
@@ -43,6 +49,11 @@ export default function FeedbackList({
   feedback,
   loading,
   onSelect,
+  canImport = false,
+  onImportCsv,
+  onAddFeedback,
+  onSimulate,
+  simulating = false,
 }: FeedbackListProps) {
   if (loading) {
     return <TableSkeleton rows={6} />;
@@ -53,7 +64,51 @@ export default function FeedbackList({
       <EmptyState
         icon={<MessageSquare className="w-8 h-8 text-slate-400" />}
         title="No feedback signals found"
-        description="There are no customer feedback records matching your current filter criteria or inbox."
+        description={
+          canImport
+            ? "Your workspace inbox is empty or no records match the current filters. Import a CSV batch, simulate ingestion, or add feedback manually to get started."
+            : "There are no customer feedback records matching your current filter criteria or inbox."
+        }
+        action={
+          canImport ? (
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+              {onImportCsv && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="md"
+                  leftIcon={<Upload className="w-4 h-4" />}
+                  onClick={onImportCsv}
+                >
+                  Import CSV
+                </Button>
+              )}
+              {onSimulate && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="md"
+                  isLoading={simulating}
+                  leftIcon={<Zap className="w-4 h-4 text-amber-500" />}
+                  onClick={onSimulate}
+                >
+                  Simulate Ingestion
+                </Button>
+              )}
+              {onAddFeedback && (
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="md"
+                  leftIcon={<Plus className="w-4 h-4" />}
+                  onClick={onAddFeedback}
+                >
+                  Add Feedback
+                </Button>
+              )}
+            </div>
+          ) : undefined
+        }
       />
     );
   }
