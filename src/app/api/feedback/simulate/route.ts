@@ -161,47 +161,41 @@ export async function POST(request: NextRequest) {
       workspaceId: user.workspaceId,
     }));
 
-    // 4. Bulk insert
-    const result = await db.feedback.createMany({ data });
-
-    // 5. Fetch inserted record IDs for embedding + classification
-    // Query recent records in this workspace to get their IDs
-    const recentCutoff = new Date(Date.now() - 60 * 1000); // 60 seconds ago
-    const insertedRecords = await db.feedback.findMany({
-      where: {
-        workspaceId: user.workspaceId,
-        createdAt: { gte: recentCutoff },
-      },
+    // 4. Bulk insert and keep the inserted IDs for embedding + classification
+    const insertedRecords = await db.feedback.createManyAndReturn({
+      data,
       select: { id: true, content: true },
-      orderBy: { createdAt: "desc" },
-      take: data.length,
     });
 
-    // 6. Fire-and-forget: classify sentiment + generate embeddings for semantic search
+    const createdCount = insertedRecords.length;
+
+    // 5. Classify sentiment + generate embeddings for semantic search
+    // Embedding is awaited so semantic search is indexed reliably before returning.
     // Each record is processed independently — failures don't stop others.
     if (insertedRecords.length > 0) {
       classifyBatch(insertedRecords, user.workspaceId);
-      embedBatch(insertedRecords);
+      const embeddingResult = await embedBatch(insertedRecords);
       console.log(
-        `[Simulate] Queued classification and embedding for ${insertedRecords.length} records ` +
+        `[Simulate] Queued classification and embedded ${embeddingResult.embedded}/${insertedRecords.length} records ` +
+        `(failed=${embeddingResult.failed}) ` +
         `in workspace ${user.workspaceId.substring(0, 8)}...`
       );
     }
 
-    // 7. Log the simulation
+    // 6. Log the simulation
     createLog({
       workspaceId: user.workspaceId,
       action: "feedback.simulated",
-      message: `Simulated ${result.count} feedback records from multiple channels`,
+      message: `Simulated ${createdCount} feedback records from multiple channels`,
       userId: user.id,
       userName: user.name || user.email,
-      metadata: { count: result.count },
+      metadata: { count: createdCount },
     });
 
-    // 6. Return success
+    // 7. Return success
     return NextResponse.json({
-      message: `Simulated ${result.count} feedback records from multiple channels`,
-      count: result.count,
+      message: `Simulated ${createdCount} feedback records from multiple channels`,
+      count: createdCount,
     });
   } catch (error) {
     if (error instanceof Error && error.name === "AuthError") {

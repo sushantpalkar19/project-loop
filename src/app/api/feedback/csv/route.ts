@@ -259,9 +259,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 7. Bulk insert valid rows
+    // 7. Bulk insert valid rows and keep the inserted IDs
     if (validRows.length > 0) {
-      await db.feedback.createMany({
+      const insertedRecords = await db.feedback.createManyAndReturn({
         data: validRows.map((row) => ({
           workspaceId: row.workspaceId,
           content: row.content,
@@ -272,42 +272,28 @@ export async function POST(request: NextRequest) {
           status: row.status,
           ...(row.createdAt && { createdAt: row.createdAt }),
         })),
-        skipDuplicates: false,
-      });
-
-      result.successCount = validRows.length;
-
-      // 8. Fetch inserted records for classification
-      // Query recent records matching the imported content to get their IDs
-      const recentCutoff = new Date(Date.now() - 60 * 1000); // 60 seconds ago
-      const insertedRecords = await db.feedback.findMany({
-        where: {
-          workspaceId: user.workspaceId,
-          createdAt: { gte: recentCutoff },
-          content: {
-            in: validRows.map((r) => r.content),
-          },
-        },
         select: {
           id: true,
           content: true,
         },
       });
 
-      // 9. Classify and embed imported records (fire-and-forget, non-blocking)
-      // Classification and embedding run in the background after the response is sent.
+      result.successCount = insertedRecords.length;
+
+      // 8. Classify and embed imported records.
+      // Embedding is awaited so semantic search is indexed reliably before returning.
       // Each record is processed independently — failures don't stop others.
       if (insertedRecords.length > 0) {
         classifyBatch(insertedRecords, user.workspaceId);
-        // Generate embeddings for semantic search (RETRIEVAL_DOCUMENT task type)
-        embedBatch(insertedRecords);
+        const embeddingResult = await embedBatch(insertedRecords);
         console.log(
-          `[CSV Import] Queued classification and embedding for ${insertedRecords.length} records ` +
+          `[CSV Import] Queued classification and embedded ${embeddingResult.embedded}/${insertedRecords.length} records ` +
+          `(failed=${embeddingResult.failed}) ` +
           `in workspace ${user.workspaceId.substring(0, 8)}...`
         );
       }
 
-      // 10. Log the CSV import
+      // 9. Log the CSV import
       createLog({
         workspaceId: user.workspaceId,
         action: "feedback.csv_import",
@@ -318,7 +304,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 11. Return result
+    // 10. Return result
     return NextResponse.json({
       message: `Import complete: ${result.successCount} imported, ${result.errorCount} failed`,
       result,

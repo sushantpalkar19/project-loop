@@ -40,9 +40,9 @@ type AskErrorCode =
 function classifyErrorCode(errorCode?: string): AskErrorCode {
   if (!errorCode) return "OTHER";
   if (errorCode === "NO_FEEDBACK_FOUND") {
-    // chat.ts distinguishes empty workspace vs not-indexed via message text
     return "NO_FEEDBACK_FOUND";
   }
+  if (errorCode === "FEEDBACK_NOT_INDEXED") return "FEEDBACK_NOT_INDEXED";
   if (errorCode === "EMBEDDING_FAILED") return "EMBEDDING_FAILED";
   if (errorCode === "GEMINI_FAILED") return "GEMINI_FAILED";
   if (errorCode === "MISSING_API_KEY") return "MISSING_API_KEY";
@@ -119,11 +119,10 @@ export default function AskLoop() {
       };
 
       if (!response.ok) {
-        // Detect whether feedback exists but embeddings are missing
-        // by looking at the error message text set by chat.ts
+        // Detect whether feedback exists but embeddings are missing.
         const isIndexingPending = Boolean(
-          data.errorCode === "NO_FEEDBACK_FOUND" &&
-          data.error?.includes("not been indexed")
+          data.errorCode === "FEEDBACK_NOT_INDEXED" ||
+          (data.errorCode === "NO_FEEDBACK_FOUND" && data.error?.includes("not been indexed"))
         );
 
         const errorCode = classifyErrorCode(data.errorCode);
@@ -132,7 +131,7 @@ export default function AskLoop() {
         setAskError({ message, errorCode, isIndexingPending });
 
         // Only toast actual server failures, not data-state messages
-        if (errorCode !== "NO_FEEDBACK_FOUND") {
+        if (errorCode !== "NO_FEEDBACK_FOUND" && errorCode !== "FEEDBACK_NOT_INDEXED") {
           toastError(message, "Ask LOOP Error");
         }
 
@@ -182,7 +181,9 @@ export default function AskLoop() {
 
   // ── Error banner helpers ───────────────────────
   /** Whether the current error is a data-state (no feedback / not indexed) vs a real failure */
-  const isDataStateError = askError?.errorCode === "NO_FEEDBACK_FOUND";
+  const isDataStateError =
+    askError?.errorCode === "NO_FEEDBACK_FOUND" ||
+    askError?.errorCode === "FEEDBACK_NOT_INDEXED";
   /** Whether the user's question should be retried (not for data-state errors) */
   const isRetryableError = askError && !isDataStateError;
 

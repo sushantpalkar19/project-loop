@@ -62,11 +62,13 @@ export async function POST(request: NextRequest) {
     // If classification fails, the feedback is still created with default NEU sentiment.
     classifyAndPersistSafe(feedback.id, result.data.content, user.workspaceId);
 
-    // 5. Generate embedding for semantic search (async — does not block response)
+    // 5. Generate embedding for semantic search before returning.
+    // Vercel serverless functions are not guaranteed to finish fire-and-forget
+    // work after the response is sent, so wait for the embedding write.
     // Uses RETRIEVAL_DOCUMENT task type for proper asymmetric retrieval.
     // If embedding fails, the feedback record is preserved and can be reindexed
     // later via the ADMIN reindex API (/api/admin/reindex).
-    generateAndPersistEmbeddingSafe(feedback.id, result.data.content);
+    await generateAndPersistEmbeddingSafe(feedback.id, result.data.content);
 
     // 6. Log the action
     createLog({

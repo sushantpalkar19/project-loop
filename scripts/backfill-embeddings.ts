@@ -18,7 +18,8 @@
 
 import "dotenv/config";
 import { db } from "../src/lib/db";
-import { generateEmbeddingsBatch, isGeminiAvailable } from "../src/lib/ai/embeddings";
+import { isGeminiAvailable } from "../src/lib/ai/embeddings";
+import { embedBatch } from "../src/lib/ai/integration";
 import { getFeedbackWithoutEmbeddings, countFeedbackWithoutEmbeddings } from "../src/lib/ai/vector-search";
 
 // ── Configuration ───────────────────────────
@@ -163,40 +164,13 @@ async function processWorkspace(
 
     console.log(`📦 Processing batch of ${feedback.length} records...`);
 
-    // Generate embeddings
-    const { embeddings, failed: batchFailed } = await generateEmbeddingsBatch(
-      feedback.map((f) => ({ id: f.id, text: f.content }))
-    );
-
-    // Persist embeddings to database using raw SQL (vector column not supported by Prisma)
-    // Must use bracket notation for pgvector: [0.1,0.1,...] not {"0.1","0.1",...}
-    for (const emb of embeddings) {
-      try {
-        const vecLiteral = `[${emb.vector.join(",")}]`;
-        if (regenerate) {
-          await db.$queryRaw`
-            INSERT INTO "Embedding" (id, "feedbackId", vector)
-            VALUES (gen_random_uuid()::text, ${emb.id}, ${vecLiteral}::vector)
-            ON CONFLICT ("feedbackId") DO UPDATE SET vector = ${vecLiteral}::vector
-          `;
-        } else {
-          await db.$queryRaw`
-            INSERT INTO "Embedding" (id, "feedbackId", vector)
-            VALUES (gen_random_uuid()::text, ${emb.id}, ${vecLiteral}::vector)
-            ON CONFLICT ("feedbackId") DO NOTHING
-          `;
-        }
-        succeeded++;
-      } catch (error) {
-        console.error(`❌ Failed to persist embedding for ${emb.id}:`, error);
-        failed++;
-      }
-    }
-
-    failed += batchFailed.length;
+    // Generate and persist embeddings through the shared integration path.
+    const { embedded, failed: batchFailed } = await embedBatch(feedback);
+    succeeded += embedded;
+    failed += batchFailed;
     processed += feedback.length;
 
-    console.log(`✅ Batch complete: ${embeddings.length} succeeded, ${batchFailed.length} failed`);
+    console.log(`✅ Batch complete: ${embedded} succeeded, ${batchFailed} failed`);
     console.log(`📊 Progress: ${processed}/${limit} processed in this workspace`);
 
     // Small delay between batches to avoid overwhelming the database

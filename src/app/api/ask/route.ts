@@ -80,6 +80,7 @@ export async function POST(request: NextRequest) {
         MISSING_API_KEY: 500,
         INVALID_INPUT: 400,
         NO_FEEDBACK_FOUND: 404,
+        FEEDBACK_NOT_INDEXED: 409,
         EMBEDDING_FAILED: 502,
         GEMINI_FAILED: 502,
         GEMINI_QUOTA_EXHAUSTED: 429,
@@ -95,16 +96,16 @@ export async function POST(request: NextRequest) {
         console.error(`[Ask LOOP] ${chatErr.code}:`, chatErr.details);
       }
 
-      if (chatErr.code === "NO_FEEDBACK_FOUND") {
+      if (chatErr.code === "NO_FEEDBACK_FOUND" || chatErr.code === "FEEDBACK_NOT_INDEXED") {
         // Return structured error — do NOT return a fake "answer" body here.
-        // The client uses response.ok (404 = not ok) to route to error display.
+        // The client uses response.ok to route to error display.
         // Include errorCode so AskLoop.tsx can show context-specific guidance.
         return NextResponse.json(
           {
             error: chatErr.message,
-            errorCode: "NO_FEEDBACK_FOUND",
+            errorCode: chatErr.code,
           },
-          { status: 404 }
+          { status }
         );
       }
 

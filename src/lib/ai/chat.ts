@@ -24,8 +24,7 @@ const MAX_QUESTION_LENGTH = 1000;
 const MIN_QUESTION_LENGTH = 5;
 
 /** Gemini generative model for chat — must support generateContent on the current API */
-// FIX: "gemini-3.6-flash" does not exist. Using the stable "gemini-2.0-flash".
-export const CHAT_MODEL = "gemini-2.0-flash" as const;
+export const CHAT_MODEL = "gemini-3.6-flash" as const;
 
 /** Max output tokens for generated answers */
 const CHAT_MAX_TOKENS = 2048;
@@ -50,6 +49,7 @@ export type ChatErrorCode =
   | "MISSING_API_KEY"
   | "INVALID_INPUT"
   | "NO_FEEDBACK_FOUND"
+  | "FEEDBACK_NOT_INDEXED"
   | "EMBEDDING_FAILED"
   | "GEMINI_FAILED"
   | "GEMINI_QUOTA_EXHAUSTED"
@@ -159,10 +159,10 @@ export async function askLoop(
         `Embeddings may be missing. Run: npx tsx scripts/backfill-embeddings.ts`
       );
       throw createChatError(
-        "NO_FEEDBACK_FOUND",
+        "FEEDBACK_NOT_INDEXED",
         `Your workspace has ${feedbackCount} feedback record(s), but none have been indexed for semantic search yet. ` +
-        "An admin can trigger reindexing from the workspace settings, or indexing will happen automatically as new feedback is added.",
-        404
+        "An admin can trigger reindexing with POST /api/admin/reindex, or indexing will happen automatically as new feedback is added.",
+        409
       );
     }
     throw createChatError(

@@ -324,11 +324,9 @@ export async function generateAndPersistEmbedding(
 ): Promise<void> {
   // 1. Check if Gemini is available
   if (!isGeminiAvailable()) {
-    console.warn(
-      `[AI Embedding] Skipped for feedback ${feedbackId}: GEMINI_API_KEY not configured. ` +
-      `Embedding will be missing until GEMINI_API_KEY is set and the record is reindexed.`
+    throw new Error(
+      "GEMINI_API_KEY is not configured. Embedding was not generated; reindex after configuring Gemini."
     );
-    return;
   }
 
   // 2. Generate embedding using RETRIEVAL_DOCUMENT task type.
@@ -344,7 +342,7 @@ export async function generateAndPersistEmbedding(
   const vectorLiteral = toPgVectorLiteral(embedding);
 
   // 4. Persist embedding using raw SQL (vector column not supported by Prisma)
-  await db.$queryRaw`
+  await db.$executeRaw`
     INSERT INTO "Embedding" (id, "feedbackId", vector)
     VALUES (gen_random_uuid()::text, ${feedbackId}, ${vectorLiteral}::vector)
     ON CONFLICT ("feedbackId") DO UPDATE SET vector = ${vectorLiteral}::vector
@@ -354,9 +352,9 @@ export async function generateAndPersistEmbedding(
 }
 
 /**
- * Fire-and-forget wrapper for generateAndPersistEmbedding.
+ * Safe wrapper for generateAndPersistEmbedding.
  * Catches all errors and logs them server-side.
- * Never throws — safe to call from async contexts without awaiting.
+ * Never throws — safe to await from request handlers.
  *
  * @param feedbackId - The feedback record to embed
  * @param content - The feedback text content
@@ -402,13 +400,16 @@ export async function embedBatch(
       batch.map((record) => generateAndPersistEmbedding(record.id, record.content))
     );
 
-    for (const result of results) {
+    for (let j = 0; j < results.length; j++) {
+      const result = results[j];
+      const record = batch[j];
+
       if (result.status === "fulfilled") {
         embedded++;
       } else {
         failed++;
         console.error(
-          `[AI Batch Embedding] Record failed:`,
+          `[AI Batch Embedding] Failed for feedback ${record.id}:`,
           result.reason instanceof Error ? result.reason.message : "Unknown error"
         );
       }
