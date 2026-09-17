@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import {
   Calendar as CalendarIcon,
@@ -40,104 +40,123 @@ export function DateRangePicker({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setTempStart(startDate);
     setTempEnd(endDate);
   }, [startDate, endDate]);
 
-  // Calculate popover position when opening
-  useEffect(() => {
-    if (isOpen && triggerRef.current) {
-      const rect = triggerRef.current.getBoundingClientRect();
-      const popoverWidth = 380; // Base width
-      const popoverHeight = 400; // Approximate height
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
+  // Calculate viewport-aware popover position
+  const updatePosition = useCallback(() => {
+    if (!triggerRef.current) return;
 
-      let left = rect.left;
-      let top = rect.bottom + 8; // 8px gap
+    const rect = triggerRef.current.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const margin = 12; // 12px margin from viewport edges
+    const gap = 8;     // 8px gap from trigger button
 
-      // Adjust horizontal position to keep within viewport
-      if (align === "right") {
-        left = rect.right - popoverWidth;
-      }
+    let popoverWidth = 380;
+    let popoverHeight = 420;
 
-      // Ensure popover doesn't go off-screen horizontally
-      if (left < 8) left = 8;
-      if (left + popoverWidth > viewportWidth - 8) {
-        left = viewportWidth - popoverWidth - 8;
-      }
-
-      // Ensure popover doesn't go off-screen vertically
-      if (top + popoverHeight > viewportHeight - 8) {
-        top = rect.top - popoverHeight - 8;
-      }
-
-      setPopoverPosition({ top, left });
+    if (popoverRef.current) {
+      const popoverRect = popoverRef.current.getBoundingClientRect();
+      if (popoverRect.width > 0) popoverWidth = popoverRect.width;
+      if (popoverRect.height > 0) popoverHeight = popoverRect.height;
     }
-  }, [isOpen, align]);
 
-  // Update position on window resize
+    // Vertical positioning: default below, flip above if space below is limited & space above is larger
+    const spaceBelow = viewportHeight - rect.bottom - gap - margin;
+    const spaceAbove = rect.top - gap - margin;
+
+    let top: number;
+    if (spaceBelow >= popoverHeight || spaceBelow >= spaceAbove) {
+      top = rect.bottom + gap;
+    } else {
+      top = rect.top - gap - popoverHeight;
+    }
+
+    // Clamp top to ensure entire popover stays inside viewport bounds
+    const maxTop = Math.max(margin, viewportHeight - popoverHeight - margin);
+    top = Math.max(margin, Math.min(top, maxTop));
+
+    // Horizontal positioning based on alignment prop
+    let left: number;
+    if (align === "right") {
+      left = rect.right - popoverWidth;
+    } else {
+      left = rect.left;
+    }
+
+    // Clamp left to viewport bounds
+    const maxLeft = Math.max(margin, viewportWidth - popoverWidth - margin);
+    left = Math.max(margin, Math.min(left, maxLeft));
+
+    setPopoverPosition({ top, left });
+  }, [align]);
+
+  // Update position on open and layout shifts
+  const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
+
+  useIsomorphicLayoutEffect(() => {
+    if (isOpen) {
+      updatePosition();
+      // Double update via rAF to capture accurate rendered DOM bounds
+      const frame = requestAnimationFrame(() => {
+        updatePosition();
+      });
+      return () => cancelAnimationFrame(frame);
+    }
+  }, [isOpen, updatePosition]);
+
+  // Handle resize and scroll
   useEffect(() => {
     if (!isOpen) return;
 
-    const handleResize = () => {
-      if (triggerRef.current) {
-        const rect = triggerRef.current.getBoundingClientRect();
-        const popoverWidth = 380;
-        const popoverHeight = 400;
-        const viewportWidth = window.innerWidth;
-        const viewportHeight = window.innerHeight;
-
-        let left = rect.left;
-        let top = rect.bottom + 8;
-
-        if (align === "right") {
-          left = rect.right - popoverWidth;
-        }
-
-        if (left < 8) left = 8;
-        if (left + popoverWidth > viewportWidth - 8) {
-          left = viewportWidth - popoverWidth - 8;
-        }
-
-        if (top + popoverHeight > viewportHeight - 8) {
-          top = rect.top - popoverHeight - 8;
-        }
-
-        setPopoverPosition({ top, left });
-      }
+    const handleScrollOrResize = () => {
+      updatePosition();
     };
 
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, [isOpen, align]);
+    window.addEventListener("resize", handleScrollOrResize);
+    window.addEventListener("scroll", handleScrollOrResize, true);
 
-  // Click outside to close
+    return () => {
+      window.removeEventListener("resize", handleScrollOrResize);
+      window.removeEventListener("scroll", handleScrollOrResize, true);
+    };
+  }, [isOpen, updatePosition]);
+
+  // Click outside to close (checks both trigger container & portal popover)
   useEffect(() => {
+    if (!isOpen) return;
+
     function handleClickOutside(e: MouseEvent) {
+      const target = e.target as Node;
       if (
         containerRef.current &&
-        !containerRef.current.contains(e.target as Node)
+        !containerRef.current.contains(target) &&
+        popoverRef.current &&
+        !popoverRef.current.contains(target)
       ) {
         setIsOpen(false);
       }
     }
+
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  }, [isOpen]);
 
   // Escape key to close
   useEffect(() => {
+    if (!isOpen) return;
+
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
         setIsOpen(false);
       }
     }
-    if (isOpen) {
-      document.addEventListener("keydown", handleKeyDown);
-    }
+    document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isOpen]);
 
@@ -297,7 +316,8 @@ export function DateRangePicker({
       {isOpen &&
         createPortal(
           <div
-            className="fixed w-[360px] sm:w-[380px] max-w-[calc(100vw-32px)] rounded-2xl bg-white border border-slate-200/90 shadow-2xl p-4 sm:p-5 z-[9999] animate-in fade-in zoom-in-95 duration-150 space-y-4"
+            ref={popoverRef}
+            className="fixed w-[360px] sm:w-[380px] max-w-[calc(100vw-24px)] max-h-[calc(100vh-24px)] overflow-y-auto rounded-2xl bg-white border border-slate-200/90 shadow-2xl p-4 sm:p-5 z-[9999] animate-in fade-in zoom-in-95 duration-150 space-y-4"
             style={{
               top: `${popoverPosition.top}px`,
               left: `${popoverPosition.left}px`,
@@ -305,137 +325,141 @@ export function DateRangePicker({
             role="dialog"
             aria-label="Select reporting period"
           >
-          {/* Header */}
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <span className="text-xs font-bold text-slate-900 flex items-center gap-2">
-              <div className="w-6 h-6 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center">
-                <CalendarIcon className="w-3.5 h-3.5 text-indigo-600" />
-              </div>
-              Select Reporting Period
-            </span>
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <span className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+                  <CalendarIcon className="w-3.5 h-3.5 text-indigo-600" />
+                </div>
+                Select Reporting Period
+              </span>
 
-            {hasValue && (
+              {hasValue && (
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  className="text-[11px] text-slate-500 hover:text-rose-600 font-semibold flex items-center gap-1 transition-colors px-2 py-1 rounded-lg hover:bg-rose-50"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  Reset
+                </button>
+              )}
+            </div>
+
+            {/* Quick Presets */}
+            <div className="space-y-1.5">
+              <span className="text-[10px] uppercase font-extrabold text-slate-400 tracking-wider block">
+                Quick Presets
+              </span>
+              <div className="grid grid-cols-2 gap-2">
+                {presets.map((p, idx) => {
+                  const val = p.getValue();
+                  const isSelected =
+                    activePreset === p.label ||
+                    (tempStart === val.startDate && tempEnd === val.endDate);
+                  const isLast = idx === presets.length - 1 && presets.length % 2 !== 0;
+
+                  return (
+                    <button
+                      key={p.label}
+                      type="button"
+                      onClick={() => handlePresetSelect(p)}
+                      className={cn(
+                        "flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all border text-left",
+                        isLast && "col-span-2 sm:col-span-1",
+                        isSelected
+                          ? "bg-indigo-50 border-indigo-300 text-indigo-950 font-bold shadow-2xs"
+                          : "border-slate-200/80 bg-slate-50/60 text-slate-700 hover:bg-slate-100 hover:border-slate-300 hover:text-slate-900"
+                      )}
+                    >
+                      <span>{p.label}</span>
+                      {isSelected && (
+                        <Check className="w-3.5 h-3.5 text-indigo-600 shrink-0 ml-1" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Custom Date Input Range */}
+            <div className="space-y-2 pt-3 border-t border-slate-100">
+              <span className="text-[10px] uppercase font-extrabold text-slate-400 tracking-wider block">
+                Custom Range
+              </span>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="space-y-1">
+                  <label className="text-[11px] text-slate-600 font-semibold block">
+                    Start Date
+                  </label>
+                  <input
+                    type="date"
+                    value={tempStart}
+                    onChange={(e) => {
+                      setTempStart(e.target.value);
+                      setActivePreset(null);
+                    }}
+                    className="w-full h-9 px-2.5 rounded-xl border border-slate-300 bg-slate-50/50 text-xs font-mono font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white transition-colors"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] text-slate-600 font-semibold block">
+                    End Date
+                  </label>
+                  <input
+                    type="date"
+                    value={tempEnd}
+                    onChange={(e) => {
+                      setTempEnd(e.target.value);
+                      setActivePreset(null);
+                    }}
+                    className="w-full h-9 px-2.5 rounded-xl border border-slate-300 bg-slate-50/50 text-xs font-mono font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white transition-colors"
+                  />
+                </div>
+              </div>
+
+              {error && (
+                <p className="text-[11px] font-medium text-rose-600 mt-1 bg-rose-50 border border-rose-200 rounded-lg px-2.5 py-1">
+                  {error}
+                </p>
+              )}
+            </div>
+
+            {/* Footer Actions */}
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100 gap-2">
               <button
                 type="button"
                 onClick={handleReset}
-                className="text-[11px] text-slate-500 hover:text-rose-600 font-semibold flex items-center gap-1 transition-colors px-2 py-1 rounded-lg hover:bg-rose-50"
+                className="text-xs text-slate-500 hover:text-slate-800 font-semibold px-2 py-1.5 rounded-lg hover:bg-slate-100 transition-colors"
               >
-                <RotateCcw className="w-3 h-3" />
-                Reset
+                Clear
               </button>
-            )}
-          </div>
 
-          {/* Quick Presets */}
-          <div className="space-y-1.5">
-            <span className="text-[10px] uppercase font-extrabold text-slate-400 tracking-wider block">
-              Quick Presets
-            </span>
-            <div className="grid grid-cols-2 gap-2">
-              {presets.map((p, idx) => {
-                const isSelected = activePreset === p.label;
-                const isLast = idx === presets.length - 1 && presets.length % 2 !== 0;
-
-                return (
-                  <button
-                    key={p.label}
-                    type="button"
-                    onClick={() => handlePresetSelect(p)}
-                    className={cn(
-                      "flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all border text-left",
-                      isLast && "col-span-2 sm:col-span-1",
-                      isSelected
-                        ? "bg-indigo-50 border-indigo-300 text-indigo-950 font-bold shadow-2xs"
-                        : "border-slate-200/80 bg-slate-50/60 text-slate-700 hover:bg-slate-100 hover:border-slate-300 hover:text-slate-900"
-                    )}
-                  >
-                    <span>{p.label}</span>
-                    {isSelected && (
-                      <Check className="w-3.5 h-3.5 text-indigo-600 shrink-0 ml-1" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Custom Date Input Range */}
-          <div className="space-y-2 pt-3 border-t border-slate-100">
-            <span className="text-[10px] uppercase font-extrabold text-slate-400 tracking-wider block">
-              Custom Range
-            </span>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <div className="space-y-1">
-                <label className="text-[11px] text-slate-600 font-semibold block">
-                  Start Date
-                </label>
-                <input
-                  type="date"
-                  value={tempStart}
-                  onChange={(e) => {
-                    setTempStart(e.target.value);
-                    setActivePreset(null);
-                  }}
-                  className="w-full h-9 px-2.5 rounded-xl border border-slate-300 bg-slate-50/50 text-xs font-mono font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white transition-colors"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[11px] text-slate-600 font-semibold block">
-                  End Date
-                </label>
-                <input
-                  type="date"
-                  value={tempEnd}
-                  onChange={(e) => {
-                    setTempEnd(e.target.value);
-                    setActivePreset(null);
-                  }}
-                  className="w-full h-9 px-2.5 rounded-xl border border-slate-300 bg-slate-50/50 text-xs font-mono font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white transition-colors"
-                />
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsOpen(false)}
+                  className="h-8 text-xs font-semibold"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleApply}
+                  className="h-8 text-xs font-bold"
+                >
+                  Apply Filter
+                </Button>
               </div>
             </div>
-
-            {error && (
-              <p className="text-[11px] font-medium text-rose-600 mt-1 bg-rose-50 border border-rose-200 rounded-lg px-2.5 py-1">
-                {error}
-              </p>
-            )}
-          </div>
-
-          {/* Footer Actions */}
-          <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={handleReset}
-              className="text-xs text-slate-500 hover:text-slate-800 font-semibold px-2 py-1.5 rounded-lg hover:bg-slate-100 transition-colors"
-            >
-              Clear
-            </button>
-
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsOpen(false)}
-                className="h-8 text-xs font-semibold"
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={handleApply}
-                className="h-8 text-xs font-bold"
-              >
-                Apply Filter
-              </Button>
-            </div>
-          </div>
-        </div>,
+          </div>,
           document.body
         )}
     </div>
   );
 }
+
