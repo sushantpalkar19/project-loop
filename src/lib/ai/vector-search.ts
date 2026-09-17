@@ -197,10 +197,23 @@ export async function searchSimilarFeedback(
   // Log workspace stats before executing (non-blocking)
   await logWorkspaceStats(workspaceId);
 
-  const results = await rawQuery.call(db, sql, ...params) as SearchResult[];
+  const rawResults = await rawQuery.call(db, sql, ...params) as SearchResult[];
+
+  // A feedback record is the unit of evidence. Keep the first result for each
+  // ID (the query is ordered by similarity) while preserving distinct records
+  // that happen to contain identical text.
+  const seenFeedbackIds = new Set<string>();
+  const results = rawResults.filter((result) => {
+    if (seenFeedbackIds.has(result.feedbackId)) {
+      return false;
+    }
+
+    seenFeedbackIds.add(result.feedbackId);
+    return true;
+  });
 
   console.log(
-    `[Ask LOOP] Vector search returned ${results.length} result(s) for workspaceId=${workspaceId.substring(0, 8)}...`
+    `[Ask LOOP] Vector search returned ${results.length} unique result(s) for workspaceId=${workspaceId.substring(0, 8)}...`
   );
 
   return results;
