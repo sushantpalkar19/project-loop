@@ -160,8 +160,8 @@ export async function askLoop(
       );
       throw createChatError(
         "NO_FEEDBACK_FOUND",
-        `Your workspace has ${feedbackCount} feedback record(s), but none have been indexed for search yet. ` +
-        "Please wait a few minutes for indexing to complete, or contact your administrator.",
+        `Your workspace has ${feedbackCount} feedback record(s), but none have been indexed for semantic search yet. ` +
+        "An admin can trigger reindexing from the workspace settings, or indexing will happen automatically as new feedback is added.",
         404
       );
     }

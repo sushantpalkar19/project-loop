@@ -16,7 +16,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/permissions";
 import { db } from "@/lib/db";
 import { FEEDBACK_CHANNELS } from "@/lib/constants";
-import { classifyBatch } from "@/lib/ai/integration";
+import { classifyBatch, embedBatch } from "@/lib/ai/integration";
 import { createLog } from "@/lib/logs";
 
 // ── Constants ─────────────────────────────────
@@ -294,11 +294,17 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // 9. Classify imported records (fire-and-forget, non-blocking)
-      // Classification runs in the background after the response is sent.
-      // Each record is classified independently — failures don't stop others.
+      // 9. Classify and embed imported records (fire-and-forget, non-blocking)
+      // Classification and embedding run in the background after the response is sent.
+      // Each record is processed independently — failures don't stop others.
       if (insertedRecords.length > 0) {
         classifyBatch(insertedRecords, user.workspaceId);
+        // Generate embeddings for semantic search (RETRIEVAL_DOCUMENT task type)
+        embedBatch(insertedRecords);
+        console.log(
+          `[CSV Import] Queued classification and embedding for ${insertedRecords.length} records ` +
+          `in workspace ${user.workspaceId.substring(0, 8)}...`
+        );
       }
 
       // 10. Log the CSV import

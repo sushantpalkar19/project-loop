@@ -10,7 +10,7 @@
 
 import { db } from "@/lib/db";
 import { classifyFeedback } from "./classify";
-import { generateEmbedding, isGeminiAvailable } from "./embeddings";
+import { generateDocumentEmbedding, isGeminiAvailable } from "./embeddings";
 import { toPgVectorLiteral } from "./vector-search";
 import type { ClassificationResult } from "./types";
 
@@ -324,14 +324,19 @@ export async function generateAndPersistEmbedding(
 ): Promise<void> {
   // 1. Check if Gemini is available
   if (!isGeminiAvailable()) {
-    console.log(
-      `[AI Embedding] Skipped for feedback ${feedbackId}: GEMINI_API_KEY not configured`
+    console.warn(
+      `[AI Embedding] Skipped for feedback ${feedbackId}: GEMINI_API_KEY not configured. ` +
+      `Embedding will be missing until GEMINI_API_KEY is set and the record is reindexed.`
     );
     return;
   }
 
-  // 2. Generate embedding
-  const embedding = await generateEmbedding(content);
+  // 2. Generate embedding using RETRIEVAL_DOCUMENT task type.
+  // Documents must use RETRIEVAL_DOCUMENT so they are compatible with
+  // RETRIEVAL_QUERY embeddings at search time (asymmetric retrieval).
+  const embedding = await generateDocumentEmbedding(content);
+
+  console.log(`[AI Embedding] Generated ${embedding.length}-dim embedding for feedback ${feedbackId}`);
 
   // 3. Convert embedding to pgvector bracket notation
   // Prisma serializes JS arrays as PostgreSQL text arrays which pgvector rejects.
@@ -344,6 +349,8 @@ export async function generateAndPersistEmbedding(
     VALUES (gen_random_uuid()::text, ${feedbackId}, ${vectorLiteral}::vector)
     ON CONFLICT ("feedbackId") DO UPDATE SET vector = ${vectorLiteral}::vector
   `;
+
+  console.log(`[AI Embedding] Persisted embedding for feedback ${feedbackId}`);
 }
 
 /**

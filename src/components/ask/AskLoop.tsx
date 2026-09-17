@@ -6,7 +6,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Dialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
-import { Loader2, Sparkles, Send, AlertCircle, Database, ArrowRight, ShieldCheck } from "lucide-react";
+import {
+  Loader2, Sparkles, Send, AlertCircle, Database,
+  ArrowRight, ShieldCheck, PackageSearch, RefreshCw,
+} from "lucide-react";
 
 interface Source {
   id: string;
@@ -24,14 +27,47 @@ interface Message {
   timestamp: Date;
 }
 
+// Error codes returned by /api/ask that require distinct UI treatment
+type AskErrorCode =
+  | "NO_FEEDBACK_FOUND"        // workspace genuinely has no feedback records
+  | "FEEDBACK_NOT_INDEXED"     // feedback exists but embeddings are missing
+  | "GEMINI_FAILED"            // AI generation failure
+  | "EMBEDDING_FAILED"         // vector search failure
+  | "MISSING_API_KEY"          // GEMINI_API_KEY not configured
+  | "GEMINI_QUOTA_EXHAUSTED"   // rate limit hit
+  | "OTHER";                   // generic server error
+
+function classifyErrorCode(errorCode?: string): AskErrorCode {
+  if (!errorCode) return "OTHER";
+  if (errorCode === "NO_FEEDBACK_FOUND") {
+    // chat.ts distinguishes empty workspace vs not-indexed via message text
+    return "NO_FEEDBACK_FOUND";
+  }
+  if (errorCode === "EMBEDDING_FAILED") return "EMBEDDING_FAILED";
+  if (errorCode === "GEMINI_FAILED") return "GEMINI_FAILED";
+  if (errorCode === "MISSING_API_KEY") return "MISSING_API_KEY";
+  if (errorCode === "GEMINI_QUOTA_EXHAUSTED") return "GEMINI_QUOTA_EXHAUSTED";
+  return "OTHER";
+}
+
+interface AskError {
+  message: string;
+  errorCode: AskErrorCode;
+  /** True when feedback records exist but embeddings are missing */
+  isIndexingPending: boolean;
+}
+
 export default function AskLoop() {
   const { error: toastError, info } = useToast();
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [askError, setAskError] = useState<AskError | null>(null);
   const [selectedSource, setSelectedSource] = useState<Source | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  /** API minimum is 5 chars — keep in sync with /api/ask schema */
+  const MIN_QUESTION_LENGTH = 5;
 
   const suggestedQuestions = [
     "What are our biggest customer complaints?",
@@ -45,9 +81,9 @@ export default function AskLoop() {
     const targetQuery = queryOverride || question;
     const trimmed = targetQuery.trim();
 
-    if (trimmed.length < 3 || trimmed.length > 500) {
-      const msg = "Question must be between 3 and 500 characters";
-      setError(msg);
+    if (trimmed.length < MIN_QUESTION_LENGTH || trimmed.length > 500) {
+      const msg = `Question must be between ${MIN_QUESTION_LENGTH} and 500 characters`;
+      setAskError({ message: msg, errorCode: "OTHER", isIndexingPending: false });
       toastError(msg, "Invalid Question");
       return;
     }
@@ -55,7 +91,7 @@ export default function AskLoop() {
     if (isLoading) return;
 
     setIsLoading(true);
-    setError(null);
+    setAskError(null);
     info("Querying workspace customer feedback vectors...", "Ask LOOP AI");
 
     const userMessage: Message = {
@@ -74,10 +110,40 @@ export default function AskLoop() {
         body: JSON.stringify({ question: trimmed }),
       });
 
-      const data = await response.json();
+      const data = await response.json() as {
+        answer?: string;
+        sources?: Source[];
+        hasEvidence?: boolean;
+        error?: string;
+        errorCode?: string;
+      };
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to get answer from Ask LOOP");
+        // Detect whether feedback exists but embeddings are missing
+        // by looking at the error message text set by chat.ts
+        const isIndexingPending = Boolean(
+          data.errorCode === "NO_FEEDBACK_FOUND" &&
+          data.error?.includes("not been indexed")
+        );
+
+        const errorCode = classifyErrorCode(data.errorCode);
+        const message = data.error || "Failed to get answer from Ask LOOP";
+
+        setAskError({ message, errorCode, isIndexingPending });
+
+        // Only toast actual server failures, not data-state messages
+        if (errorCode !== "NO_FEEDBACK_FOUND") {
+          toastError(message, "Ask LOOP Error");
+        }
+
+        // Restore user question so they can retry
+        setMessages((prev) => prev.slice(0, -1));
+        setQuestion(trimmed);
+        return;
+      }
+
+      if (!data.answer) {
+        throw new Error("Received an empty answer from Ask LOOP");
       }
 
       const assistantMessage: Message = {
@@ -90,9 +156,9 @@ export default function AskLoop() {
 
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "An unexpected error occurred";
-      setError(errorMessage);
-      toastError(errorMessage, "Ask LOOP Error");
+      const message = err instanceof Error ? err.message : "An unexpected error occurred";
+      setAskError({ message, errorCode: "OTHER", isIndexingPending: false });
+      toastError(message, "Ask LOOP Error");
       setMessages((prev) => prev.slice(0, -1));
       setQuestion(trimmed);
     } finally {
@@ -113,6 +179,13 @@ export default function AskLoop() {
   };
 
   const isEmpty = messages.length === 0;
+
+  // ── Error banner helpers ───────────────────────
+  /** Whether the current error is a data-state (no feedback / not indexed) vs a real failure */
+  const isDataStateError = askError?.errorCode === "NO_FEEDBACK_FOUND";
+  /** Whether the user's question should be retried (not for data-state errors) */
+  const isRetryableError = askError && !isDataStateError;
+
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-200">
@@ -141,26 +214,95 @@ export default function AskLoop() {
         </div>
       </div>
 
-      {/* Global Error Banner */}
-      {error && (
-        <Card className="border-rose-200 bg-rose-50/80">
-          <CardContent className="p-4 flex items-center justify-between gap-3 text-xs text-rose-900 font-medium">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-              <span>{error}</span>
+      {/* ── Data-State Banner: No Feedback / Not Indexed ── */}
+      {askError && isDataStateError && (
+        <Card className={`border ${
+          askError.isIndexingPending
+            ? "border-amber-200 bg-amber-50/80"
+            : "border-slate-200 bg-slate-50/80"
+        }`}>
+          <CardContent className="p-5 flex items-start gap-3">
+            <div className={`mt-0.5 shrink-0 ${
+              askError.isIndexingPending ? "text-amber-500" : "text-slate-400"
+            }`}>
+              <PackageSearch className="w-5 h-5" />
+            </div>
+            <div className="flex-1 space-y-1">
+              <p className={`text-xs font-bold ${
+                askError.isIndexingPending ? "text-amber-900" : "text-slate-800"
+              }`}>
+                {askError.isIndexingPending
+                  ? "Feedback exists but indexing is pending"
+                  : "No customer feedback in this workspace"}
+              </p>
+              <p className={`text-xs ${
+                askError.isIndexingPending ? "text-amber-700" : "text-slate-600"
+              }`}>
+                {askError.message}
+              </p>
+              {askError.isIndexingPending && (
+                <p className="text-[11px] text-amber-600 font-semibold mt-1">
+                  Ask your workspace admin to trigger reindexing, or try again in a few minutes.
+                </p>
+              )}
+              {!askError.isIndexingPending && (
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Use the Feedback Inbox to import feedback via CSV or create individual records.
+                </p>
+              )}
             </div>
             <button
-              onClick={() => setError(null)}
-              className="text-rose-700 hover:text-rose-950 font-bold underline"
+              onClick={() => setAskError(null)}
+              className="text-slate-400 hover:text-slate-700 transition-colors shrink-0 text-xs font-bold"
+              aria-label="Dismiss"
             >
-              Dismiss
+              ✕
             </button>
           </CardContent>
         </Card>
       )}
 
-      {/* Welcome Suggested Questions Grid */}
-      {isEmpty && (
+      {/* ── Error Banner: Real Server / AI Errors ── */}
+      {askError && isRetryableError && (
+        <Card className="border-rose-200 bg-rose-50/80">
+          <CardContent className="p-4 flex items-center justify-between gap-3">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <div className="space-y-0.5">
+                <p className="text-xs text-rose-900 font-bold">
+                  {askError.errorCode === "GEMINI_QUOTA_EXHAUSTED"
+                    ? "AI rate limit reached"
+                    : askError.errorCode === "MISSING_API_KEY"
+                    ? "AI not configured"
+                    : "Ask LOOP encountered an error"}
+                </p>
+                <p className="text-xs text-rose-800">{askError.message}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Retry button for retryable errors */}
+              {question.trim().length >= MIN_QUESTION_LENGTH && (
+                <button
+                  onClick={() => handleSubmit()}
+                  className="flex items-center gap-1 text-xs text-rose-700 hover:text-rose-950 font-bold"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  Retry
+                </button>
+              )}
+              <button
+                onClick={() => setAskError(null)}
+                className="text-rose-700 hover:text-rose-950 font-bold underline text-xs"
+              >
+                Dismiss
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Welcome: Suggested Questions Grid (shown when no messages and no blocking error) ── */}
+      {isEmpty && !askError && (
         <Card>
           <CardHeader className="text-center pb-2">
             <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-2 border border-indigo-100 shadow-2xs">
@@ -311,7 +453,7 @@ export default function AskLoop() {
             />
             <Button
               onClick={() => handleSubmit()}
-              disabled={isLoading || question.trim().length < 3}
+              disabled={isLoading || question.trim().length < MIN_QUESTION_LENGTH}
               isLoading={isLoading}
               variant="primary"
               size="md"

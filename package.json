@@ -21,6 +21,8 @@
     "test:auth": "playwright test tests/auth-rbac.spec.ts",
     "test:reports": "playwright test tests/reports.spec.ts",
     "test:milestone": "playwright test tests/milestone-integration.spec.ts",
+    "test:ask": "playwright test tests/ask-loop.spec.ts",
+    "test:embed": "playwright test tests/embedding-pipeline.spec.ts",
     "test:report": "playwright show-report"
   },
   "dependencies": {

@@ -96,19 +96,30 @@ export async function POST(request: NextRequest) {
       }
 
       if (chatErr.code === "NO_FEEDBACK_FOUND") {
+        // Return structured error — do NOT return a fake "answer" body here.
+        // The client uses response.ok (404 = not ok) to route to error display.
+        // Include errorCode so AskLoop.tsx can show context-specific guidance.
         return NextResponse.json(
           {
             error: chatErr.message,
-            answer:
-              "I don't have any customer feedback to search yet. Add some feedback to your workspace and I'll be able to help you.",
-            sources: [],
-            hasEvidence: false,
+            errorCode: "NO_FEEDBACK_FOUND",
           },
-          { status }
+          { status: 404 }
         );
       }
 
-      return NextResponse.json({ error: chatErr.message }, { status });
+      if (chatErr.code === "INSUFFICIENT_EVIDENCE") {
+        // Still a successful response — answer is returned but flagged low-confidence
+        return NextResponse.json(
+          { error: chatErr.message, errorCode: "INSUFFICIENT_EVIDENCE" },
+          { status: 200 }
+        );
+      }
+
+      return NextResponse.json(
+        { error: chatErr.message, errorCode: chatErr.code },
+        { status }
+      );
     }
 
     console.error("[Ask LOOP] Unexpected error:", error);

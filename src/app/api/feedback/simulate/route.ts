@@ -14,6 +14,7 @@ import { requireRole } from "@/lib/permissions";
 import { db } from "@/lib/db";
 import { FEEDBACK_CHANNELS } from "@/lib/constants";
 import { createLog } from "@/lib/logs";
+import { classifyBatch, embedBatch } from "@/lib/ai/integration";
 
 // ── Realistic Feedback Templates ──────────────
 
@@ -163,7 +164,31 @@ export async function POST(request: NextRequest) {
     // 4. Bulk insert
     const result = await db.feedback.createMany({ data });
 
-    // 5. Log the simulation
+    // 5. Fetch inserted record IDs for embedding + classification
+    // Query recent records in this workspace to get their IDs
+    const recentCutoff = new Date(Date.now() - 60 * 1000); // 60 seconds ago
+    const insertedRecords = await db.feedback.findMany({
+      where: {
+        workspaceId: user.workspaceId,
+        createdAt: { gte: recentCutoff },
+      },
+      select: { id: true, content: true },
+      orderBy: { createdAt: "desc" },
+      take: data.length,
+    });
+
+    // 6. Fire-and-forget: classify sentiment + generate embeddings for semantic search
+    // Each record is processed independently — failures don't stop others.
+    if (insertedRecords.length > 0) {
+      classifyBatch(insertedRecords, user.workspaceId);
+      embedBatch(insertedRecords);
+      console.log(
+        `[Simulate] Queued classification and embedding for ${insertedRecords.length} records ` +
+        `in workspace ${user.workspaceId.substring(0, 8)}...`
+      );
+    }
+
+    // 7. Log the simulation
     createLog({
       workspaceId: user.workspaceId,
       action: "feedback.simulated",
