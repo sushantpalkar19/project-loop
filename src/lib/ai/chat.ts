@@ -10,6 +10,7 @@
 import { generateEmbedding, isGeminiAvailable, getGeminiClient } from "./embeddings";
 import { parseGeminiError } from "./gemini-errors";
 import { searchSimilarFeedback, type SearchResult } from "./vector-search";
+import { db } from "@/lib/db";
 
 // ── Configuration ───────────────────────────
 
@@ -23,7 +24,8 @@ const MAX_QUESTION_LENGTH = 1000;
 const MIN_QUESTION_LENGTH = 5;
 
 /** Gemini generative model for chat — must support generateContent on the current API */
-export const CHAT_MODEL = "gemini-3.6-flash" as const;
+// FIX: "gemini-3.6-flash" does not exist. Using the stable "gemini-2.0-flash".
+export const CHAT_MODEL = "gemini-2.0-flash" as const;
 
 /** Max output tokens for generated answers */
 const CHAT_MAX_TOKENS = 2048;
@@ -87,6 +89,8 @@ export async function askLoop(
 ): Promise<ChatResponse> {
   const trimmedQuestion = question.trim();
 
+  console.log(`[Ask LOOP] Request received — workspaceId=${workspaceId.substring(0, 8)}..., questionLength=${trimmedQuestion.length}`);
+
   if (trimmedQuestion.length < MIN_QUESTION_LENGTH) {
     throw createChatError(
       "INVALID_INPUT",
@@ -111,9 +115,20 @@ export async function askLoop(
     );
   }
 
+  // Check if workspace has any feedback at all before attempting vector search.
+  // This lets us distinguish "no data" from a vector search failure.
+  let feedbackCount = 0;
+  try {
+    feedbackCount = await db.feedback.count({ where: { workspaceId } });
+    console.log(`[Ask LOOP] Workspace feedback count: ${feedbackCount}`);
+  } catch (e) {
+    console.warn("[Ask LOOP] Could not count workspace feedback:", e instanceof Error ? e.message : e);
+  }
+
   let queryEmbedding: number[];
   try {
     queryEmbedding = await generateEmbedding(trimmedQuestion);
+    console.log(`[Ask LOOP] Query embedding generated (${queryEmbedding.length} dims)`);
   } catch (error) {
     throw mapProviderError(error, "embedding", "EMBEDDING_FAILED", "Failed to process your question");
   }
@@ -125,6 +140,7 @@ export async function askLoop(
       workspaceId,
       RETRIEVAL_TOP_K
     );
+    console.log(`[Ask LOOP] Vector search returned ${searchResults.length} result(s)`);
   } catch (error) {
     console.error("[Ask LOOP] Vector search failed:", error instanceof Error ? error.message : error);
     throw createChatError(
@@ -136,6 +152,19 @@ export async function askLoop(
   }
 
   if (searchResults.length === 0) {
+    // If feedback exists but vector search returned nothing, embeddings are missing or stale.
+    if (feedbackCount > 0) {
+      console.warn(
+        `[Ask LOOP] Workspace has ${feedbackCount} feedback record(s) but vector search returned 0 results. ` +
+        `Embeddings may be missing. Run: npx tsx scripts/backfill-embeddings.ts`
+      );
+      throw createChatError(
+        "NO_FEEDBACK_FOUND",
+        `Your workspace has ${feedbackCount} feedback record(s), but none have been indexed for search yet. ` +
+        "Please wait a few minutes for indexing to complete, or contact your administrator.",
+        404
+      );
+    }
     throw createChatError(
       "NO_FEEDBACK_FOUND",
       "No customer feedback found in your workspace. Add feedback to enable Ask LOOP.",
@@ -148,6 +177,7 @@ export async function askLoop(
   let answer: string;
   try {
     answer = await callGemini(trimmedQuestion, context);
+    console.log(`[Ask LOOP] Gemini generated answer (${answer.length} chars)`);
   } catch (error) {
     throw mapProviderError(error, "generation", "GEMINI_FAILED", "Failed to generate answer");
   }

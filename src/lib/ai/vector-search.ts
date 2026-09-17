@@ -11,6 +11,25 @@
 import { db } from "@/lib/db";
 import { EMBEDDING_DIMENSION } from "./embeddings";
 
+// ── Diagnostic Logging ────────────────────────
+// Logs workspace-level counts for production debugging.
+// Never logs PII, full feedback content, or API keys.
+
+async function logWorkspaceStats(workspaceId: string): Promise<void> {
+  try {
+    const [feedbackCount, embeddingCount] = await Promise.all([
+      db.feedback.count({ where: { workspaceId } }),
+      db.embedding.count({ where: { feedback: { workspaceId } } }),
+    ]);
+    console.log(
+      `[Ask LOOP] Workspace stats — feedbackCount=${feedbackCount}, embeddingCount=${embeddingCount}, workspaceId=${workspaceId.substring(0, 8)}...`
+    );
+  } catch (e) {
+    // Non-fatal — don't block the search
+    console.warn("[Ask LOOP] Failed to fetch workspace stats for logging:", e instanceof Error ? e.message : e);
+  }
+}
+
 // ── Types ─────────────────────────────────────
 
 export interface SearchResult {
@@ -117,8 +136,10 @@ export async function searchSimilarFeedback(
     params.push(filters.dateTo);
   }
 
-  const whereClause = conditions.join(", \
-        ");
+  // FIX: must join with " AND " — the original code used ", \\n        " which
+  // produced a comma-separated list ("a = $1, b = $2") causing PostgreSQL
+  // syntax error: column "b" does not exist in a FROM clause context.
+  const whereClause = conditions.join(" AND ");
 
   // 5. Build and execute the full query
   // The vector literal is server-generated (safe), workspaceId and filters are parameterized.
@@ -172,7 +193,15 @@ export async function searchSimilarFeedback(
   const rawQuery = (
     db as unknown as Record<string, (...args: unknown[]) => Promise<unknown[]>>
   ).$queryRawUnsafe;
+
+  // Log workspace stats before executing (non-blocking)
+  await logWorkspaceStats(workspaceId);
+
   const results = await rawQuery.call(db, sql, ...params) as SearchResult[];
+
+  console.log(
+    `[Ask LOOP] Vector search returned ${results.length} result(s) for workspaceId=${workspaceId.substring(0, 8)}...`
+  );
 
   return results;
 }

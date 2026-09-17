@@ -34,11 +34,13 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const user = await requireRole(["ADMIN", "MANAGER", "ANALYST", "VIEWER"]);
+    console.log(`[Ask LOOP] POST /api/ask — userId=${user.id.substring(0, 8)}..., workspaceId=${user.workspaceId.substring(0, 8)}...`);
 
     const body = await request.json();
     const result = askRequestSchema.safeParse(body);
 
     if (!result.success) {
+      console.warn(`[Ask LOOP] Validation failed:`, result.error.flatten().fieldErrors);
       return NextResponse.json(
         { error: "Validation failed", details: result.error.flatten().fieldErrors },
         { status: 400 }
@@ -56,6 +58,8 @@ export async function POST(request: NextRequest) {
       userName: user.name || user.email,
       metadata: { questionLength: result.data.question.length, hasEvidence: response.hasEvidence },
     });
+
+    console.log(`[Ask LOOP] Success — hasEvidence=${response.hasEvidence}, sources=${response.sources.length}`);
 
     return NextResponse.json({
       answer: response.answer,

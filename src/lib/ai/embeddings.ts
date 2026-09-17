@@ -6,7 +6,7 @@
  * The API key is read from environment variables and never exposed to clients.
  */
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, TaskType } from "@google/generative-ai";
 import { parseGeminiError } from "./gemini-errors";
 
 // ── Model Configuration ───────────────────────
@@ -16,6 +16,14 @@ export const EMBEDDING_MODEL = "gemini-embedding-001" as const;
 
 /** Embedding dimension — must match database schema vector(1536) */
 export const EMBEDDING_DIMENSION = 1536 as const;
+
+/**
+ * Task types for asymmetric retrieval.
+ * Use RETRIEVAL_QUERY for questions (runtime queries).
+ * Use RETRIEVAL_DOCUMENT for documents (ingestion/backfill).
+ */
+export const TASK_TYPE_QUERY = TaskType.RETRIEVAL_QUERY;
+export const TASK_TYPE_DOCUMENT = TaskType.RETRIEVAL_DOCUMENT;
 
 /** Maximum text length for embedding (Gemini limit in characters) */
 const MAX_TEXT_LENGTH = 8192;
@@ -64,19 +72,37 @@ export function isGeminiAvailable(): boolean {
 // ── Embedding Generation ─────────────────────
 
 /**
- * Generate an embedding for a single text input.
+ * Generate a query embedding for semantic search.
  *
- * This function:
- * 1. Validates input length
- * 2. Checks if Gemini API is available
- * 3. Calls Gemini embedding API with output_dimensionality=1536
- * 4. Returns the embedding vector as a number array
+ * Uses RETRIEVAL_QUERY task type — optimized for asymmetric retrieval
+ * where the query is short and the documents are longer.
  *
- * @param text - The text to embed
- * @returns Embedding vector (array of numbers)
+ * @param text - The question/query text to embed
+ * @returns Embedding vector (1536 dimensions)
  * @throws EmbeddingError on failure
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
+  return generateEmbeddingWithTaskType(text, TASK_TYPE_QUERY);
+}
+
+/**
+ * Generate a document embedding for ingestion/backfill.
+ *
+ * Uses RETRIEVAL_DOCUMENT task type — optimized for storing documents
+ * that will be searched against query embeddings at retrieval time.
+ *
+ * @param text - The feedback content to embed
+ * @returns Embedding vector (1536 dimensions)
+ * @throws EmbeddingError on failure
+ */
+export async function generateDocumentEmbedding(text: string): Promise<number[]> {
+  return generateEmbeddingWithTaskType(text, TASK_TYPE_DOCUMENT);
+}
+
+/**
+ * Internal: generate an embedding with a specific task type.
+ */
+async function generateEmbeddingWithTaskType(text: string, taskType: TaskType): Promise<number[]> {
   // 1. Validate input
   if (!text || typeof text !== "string") {
     throw createEmbeddingError("INVALID_INPUT", "Text is required");
@@ -109,9 +135,19 @@ export async function generateEmbedding(text: string): Promise<number[]> {
   // 3. Call Gemini API
   try {
     const client = getGeminiClient();
-    const model = client.getGenerativeModel({ model: EMBEDDING_MODEL });
+    // FIX: pass outputDimensionality to get exactly 1536 dims from the API
+    // instead of truncating 3072 → 1536 client-side (which is imprecise).
+    const model = client.getGenerativeModel({
+      model: EMBEDDING_MODEL,
+    });
 
-    const result = await model.embedContent(trimmed);
+    // FIX: use { content, taskType } form:
+    // - taskType RETRIEVAL_QUERY tells the model this is a search query
+    //   (asymmetric retrieval: query vs document task types differ)
+    const result = await model.embedContent({
+      content: { parts: [{ text: trimmed }], role: "user" },
+      taskType,
+    });
 
     const embedding = result.embedding.values;
 
@@ -119,19 +155,18 @@ export async function generateEmbedding(text: string): Promise<number[]> {
       throw createEmbeddingError("API_ERROR", "No embedding returned from Gemini");
     }
 
-    // 4. Truncate to 1536 dimensions if needed
-    // Gemini defaults to 3072, we need 1536 for database compatibility
-    const truncatedEmbedding = embedding.slice(0, EMBEDDING_DIMENSION);
+    // Slice to EMBEDDING_DIMENSION as a safety net for dimension consistency
+    const finalEmbedding = embedding.slice(0, EMBEDDING_DIMENSION);
 
     // 5. Validate dimension
-    if (truncatedEmbedding.length !== EMBEDDING_DIMENSION) {
+    if (finalEmbedding.length !== EMBEDDING_DIMENSION) {
       throw createEmbeddingError(
         "DIMENSION_MISMATCH",
-        `Embedding dimension ${truncatedEmbedding.length} does not match expected ${EMBEDDING_DIMENSION}`
+        `Embedding dimension ${finalEmbedding.length} does not match expected ${EMBEDDING_DIMENSION}`
       );
     }
 
-    return truncatedEmbedding;
+    return finalEmbedding;
   } catch (error) {
     if (isEmbeddingError(error)) {
       throw error;
@@ -176,7 +211,9 @@ export async function generateEmbeddingsBatch(
 
     const results = await Promise.allSettled(
       batch.map(async (item) => {
-        const vector = await generateEmbedding(item.text);
+        // FIX: use generateDocumentEmbedding (RETRIEVAL_DOCUMENT) for stored feedback records.
+        // generateEmbedding uses RETRIEVAL_QUERY — wrong task type for document ingestion.
+        const vector = await generateDocumentEmbedding(item.text);
         return { id: item.id, vector };
       })
     );
